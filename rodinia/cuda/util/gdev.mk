@@ -11,7 +11,7 @@ NVCCFLAGS += -O3 \
 CFLAGS += -I$(CUDA_TOP_DIR)/util \
 	-I/usr/local/gdev/include \
 	-L/usr/local/gdev/lib64 \
-	-lucuda -lgdev \
+	-lcuda -lgdev \
 	-O3 \
 	-Wall \
 
