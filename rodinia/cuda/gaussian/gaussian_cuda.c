@@ -151,7 +151,6 @@ int main(int argc, char *argv []){
     free(m);
     free(a);
     free(b);
-
     res = cuda_driver_api_exit(ctx, mod);
     if (res != CUDA_SUCCESS) {
         printf("cuda_driver_api_exit failed: res = %u\n", res);
@@ -359,15 +358,26 @@ int ForwardSub(CUmodule mod)
     gettimeofday(&time_end, NULL);
     totalKernelTime = (time_end.tv_sec * 1000000 + time_end.tv_usec) - (time_start.tv_sec * 1000000 + time_start.tv_usec);
 
-    /*
-    // copy memory back to CPU
-    cudaMemcpy(m, m_cuda, Size * Size * sizeof(float),cudaMemcpyDeviceToHost );
-    cudaMemcpy(a, a_cuda, Size * Size * sizeof(float),cudaMemcpyDeviceToHost );
-    cudaMemcpy(b, b_cuda, Size * sizeof(float),cudaMemcpyDeviceToHost );
-    cudaFree(m_cuda);
-    cudaFree(a_cuda);
-    cudaFree(b_cuda);
-    */
+    /* Copy data from device memory to main memory */
+    res = cuMemcpyDtoH(m, m_cuda, sizeof(float) * Size * Size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemcpyHtoD failed: res = %u\n", res);
+        return ;
+    }
+    res = cuMemcpyDtoH(a, a_cuda, sizeof(float) * Size * Size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemcpyHtoD failed: res = %u\n", res);
+        return ;
+    }
+    res = cuMemcpyDtoH(b, b_cuda, sizeof(float) * Size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemcpyHtoD failed: res = %u\n", res);
+        return ;
+    }
+
+	cuMemFree(m_cuda);
+	cuMemFree(a_cuda);
+	cuMemFree(b_cuda);
 }
 
 /*------------------------------------------------------
