@@ -33,7 +33,7 @@ FILE *fp;
 
 void InitProblemOnce(char *filename);
 void InitPerRun();
-void ForwardSub();
+int ForwardSub(CUmodule mod);
 void BackSub();
 void InitMat(float *ary, int nrow, int ncol);
 void InitAry(float *ary, int ary_size);
@@ -47,9 +47,10 @@ unsigned int totalKernelTime = 0;
 // KERNEL CODE
 //=========================================================================
 
-CUresult gaussian_launch(CUmodule mod, int gdx, int gdy, int bdx, int bdy)
+CUresult gaussian_launch(CUmodule mod, int gdx, int gdy, int bdx, int bdy, CUdeviceptr m_cuda,
+        CUdeviceptr a_cuda, int Size, int t)
 {
-	void* param[] = {}; /* no params */
+	void* param[] = {&m_cuda, &a_cuda, &Size, &t};
 	CUfunction f;
 	CUresult res;
 
@@ -74,9 +75,7 @@ int main(int argc, char *argv []){
 	CUcontext ctx;
 	CUmodule mod;
 	CUresult res;
-	CUdeviceptr m_cuda;
-	CUdeviceptr a_cuda;
-	CUdeviceptr b_cuda;
+    int rt;
 
     int verbose = 1;
 
@@ -93,51 +92,8 @@ int main(int argc, char *argv []){
 		return -1;
 	}
 
-	/* Allocate device memory */
-	res = cuMemAlloc(&m_cuda, sizeof(float) * Size * Size);
-	if (res != CUDA_SUCCESS) {
-		printf("cuMemAlloc failed: res = %u\n", res);
-		return -1;
-	}
-
-	res = cuMemAlloc(&a_cuda, sizeof(float) * Size * Size);
-	if (res != CUDA_SUCCESS) {
-		printf("cuMemAlloc failed: res = %u\n", res);
-		return -1;
-	}
-
-	res = cuMemAlloc(&b_cuda, sizeof(float) * Size);
-	if (res != CUDA_SUCCESS) {
-		printf("cuMemAlloc failed: res = %u\n", res);
-		return -1;
-	}
-
-    //begin timing
-    struct timeval time_start;
-    gettimeofday(&time_start, NULL);	
-
-    /* Copy data from main memory to device memory */
-    res = cuMemcpyHtoD(a_cuda, a, sizeof(float) * Size * Size);
-    if (res != CUDA_SUCCESS) {
-        printf("cuMemcpyHtoD failed: res = %u\n", res);
-        return ;
-    }
-
-    res = cuMemcpyHtoD(b_cuda, b, sizeof(float) * Size);
-    if (res != CUDA_SUCCESS) {
-        printf("cuMemcpyHtoD failed: res = %u\n", res);
-        return ;
-    }
-
-    res = cuMemcpyHtoD(m_cuda, m, sizeof(float) * Size * Size);
-    if (res != CUDA_SUCCESS) {
-        printf("cuMemcpyHtoD failed: res = %u\n", res);
-        return ;
-    }
-
-    // run kernels
-    // TODO
-    //ForwardSub();
+    rt = ForwardSub(mod);
+    if (rt < 0) return -1;
 
     /*
     //end timing
@@ -335,57 +291,76 @@ void InitPerRun()
  ** elimination.
  **------------------------------------------------------
  */
-/*
-void ForwardSub()
+int ForwardSub(CUmodule mod)
 {
 	int t;
-    float *m_cuda,*a_cuda,*b_cuda;
+    CUdeviceptr m_cuda, a_cuda, b_cuda;
+	CUresult res;
 
-	// allocate memory on GPU
-	cudaMalloc((void **) &m_cuda, Size * Size * sizeof(float));
+	/* Allocate device memory */
+	res = cuMemAlloc(&m_cuda, sizeof(float) * Size * Size);
+	if (res != CUDA_SUCCESS) {
+		printf("cuMemAlloc failed: res = %u\n", res);
+		return -1;
+	}
 
-	cudaMalloc((void **) &a_cuda, Size * Size * sizeof(float));
+	res = cuMemAlloc(&a_cuda, sizeof(float) * Size * Size);
+	if (res != CUDA_SUCCESS) {
+		printf("cuMemAlloc failed: res = %u\n", res);
+		return -1;
+	}
 
-	cudaMalloc((void **) &b_cuda, Size * sizeof(float));	
+	res = cuMemAlloc(&b_cuda, sizeof(float) * Size);
+	if (res != CUDA_SUCCESS) {
+		printf("cuMemAlloc failed: res = %u\n", res);
+		return -1;
+	}
 
-	// copy memory to GPU
-	cudaMemcpy(m_cuda, m, Size * Size * sizeof(float),cudaMemcpyHostToDevice );
-	cudaMemcpy(a_cuda, a, Size * Size * sizeof(float),cudaMemcpyHostToDevice );
-	cudaMemcpy(b_cuda, b, Size * sizeof(float),cudaMemcpyHostToDevice );
+    /* Copy data from main memory to device memory */
+    res = cuMemcpyHtoD(a_cuda, a, sizeof(float) * Size * Size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemcpyHtoD failed: res = %u\n", res);
+        return -1;
+    }
 
-	int block_size,grid_size;
+    res = cuMemcpyHtoD(b_cuda, b, sizeof(float) * Size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemcpyHtoD failed: res = %u\n", res);
+        return -1;
+    }
 
+    res = cuMemcpyHtoD(m_cuda, m, sizeof(float) * Size * Size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemcpyHtoD failed: res = %u\n", res);
+        return -1;
+    }
+
+	int block_size, grid_size;
 	block_size = MAXBLOCKSIZE;
 	grid_size = (Size/block_size) + (!(Size%block_size)? 0:1);
 	//printf("1d grid size: %d\n",grid_size);
-
-
-	dim3 dimBlock(block_size);
-	dim3 dimGrid(grid_size);
-	//dim3 dimGrid( (N/dimBlock.x) + (!(N%dimBlock.x)?0:1) );
 
 	int blockSize2d, gridSize2d;
 	blockSize2d = 4;
 	gridSize2d = (Size/blockSize2d) + (!(Size%blockSize2d?0:1)); 
 
-	dim3 dimBlockXY(blockSize2d,blockSize2d);
-	dim3 dimGridXY(gridSize2d,gridSize2d);
-
     // begin timing kernels
     struct timeval time_start;
     gettimeofday(&time_start, NULL);
 	for (t=0; t<(Size-1); t++) {
-		Fan1<<<dimGrid,dimBlock>>>(m_cuda,a_cuda,Size,t);
-		cudaThreadSynchronize();
-		Fan2<<<dimGridXY,dimBlockXY>>>(m_cuda,a_cuda,b_cuda,Size,Size-t,t);
-		cudaThreadSynchronize();
-		checkCUDAError("Fan2");
+        // run kernels
+		gaussian_launch(mod, gridSize2d, gridSize2d, blockSize2d, blockSize2d, m_cuda, a_cuda, Size, t);
+		//cudaThreadSynchronize();
+		//Fan2<<<dimGridXY,dimBlockXY>>>(m_cuda,a_cuda,b_cuda,Size,Size-t,t);
+		//cudaThreadSynchronize();
+		//checkCUDAError("Fan2");
 	}
 	// end timing kernels
 	struct timeval time_end;
     gettimeofday(&time_end, NULL);
     totalKernelTime = (time_end.tv_sec * 1000000 + time_end.tv_usec) - (time_start.tv_sec * 1000000 + time_start.tv_usec);
 
+    /*
 	// copy memory back to CPU
 	cudaMemcpy(m, m_cuda, Size * Size * sizeof(float),cudaMemcpyDeviceToHost );
 	cudaMemcpy(a, a_cuda, Size * Size * sizeof(float),cudaMemcpyDeviceToHost );
@@ -393,8 +368,8 @@ void ForwardSub()
 	cudaFree(m_cuda);
 	cudaFree(a_cuda);
 	cudaFree(b_cuda);
+    */
 }
-*/
 
 /*------------------------------------------------------
  ** BackSub() -- Backward substitution
