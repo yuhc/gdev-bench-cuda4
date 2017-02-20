@@ -40,8 +40,9 @@ void InitAry(float *ary, int ary_size);
 void PrintMat(float *ary, int nrow, int ncolumn);
 void PrintAry(float *ary, int ary_size);
 void PrintDeviceProperties();
-void checkCUDAError(const char *msg);
+
 unsigned int totalKernelTime = 0;
+unsigned int total_time = 0;
 
 //=========================================================================
 // KERNEL CODE
@@ -54,7 +55,7 @@ CUresult gaussian_launch(CUmodule mod, int gdx, int gdy, int bdx, int bdy, CUdev
 	CUfunction f;
 	CUresult res;
 
-	res = cuModuleGetFunction(&f, mod, "Fan1");
+	res = cuModuleGetFunction(&f, mod, "_Z4Fan1PfS_ii");
 	if (res != CUDA_SUCCESS) {
 		printf("cuModuleGetFunction failed: res = %u\n", res);
 		return res;
@@ -68,7 +69,29 @@ CUresult gaussian_launch(CUmodule mod, int gdx, int gdy, int bdx, int bdy, CUdev
 	}
 
 	return CUDA_SUCCESS;
+}
 
+CUresult gaussian_launch2(CUmodule mod, int gdx, int gdy, int bdx, int bdy, CUdeviceptr m_cuda,
+        CUdeviceptr a_cuda, CUdeviceptr b_cuda, int Size, int j1, int t)
+{
+	void* param[] = {&m_cuda, &a_cuda, &b_cuda, &Size, &j1, &t};
+	CUfunction f;
+	CUresult res;
+
+	res = cuModuleGetFunction(&f, mod, "_Z4Fan2PfS_S_iii");
+	if (res != CUDA_SUCCESS) {
+		printf("cuModuleGetFunction failed: res = %u\n", res);
+		return res;
+	}
+
+	/* shared memory size is known in the kernel image. */
+	res = cuLaunchKernel(f, gdx, gdy, 1, bdx, bdy, 1, 0, 0, (void**) param, NULL);
+	if (res != CUDA_SUCCESS) {
+		printf("cuLaunchKernel(euclid) failed: res = %u\n", res);
+		return res;
+	}
+
+	return CUDA_SUCCESS;
 }
 
 int main(int argc, char *argv []){
@@ -85,22 +108,6 @@ int main(int argc, char *argv []){
     }
     InitPerRun();
 
-	/* call our common CUDA initialization utility function. */
-	res = cuda_driver_api_init(&ctx, &mod, "./gaussian.cubin");
-	if (res != CUDA_SUCCESS) {
-		printf("cuda_driver_api_init failed: res = %u\n", res);
-		return -1;
-	}
-
-    rt = ForwardSub(mod);
-    if (rt < 0) return -1;
-
-    /*
-    //end timing
-    struct timeval time_end;
-    gettimeofday(&time_end, NULL);
-    unsigned int time_total = (time_end.tv_sec * 1000000 + time_end.tv_usec) - (time_start.tv_sec * 1000000 + time_start.tv_usec);
-
     if (verbose) {
         printf("Matrix m is: \n");
         PrintMat(m, Size, Size);
@@ -111,37 +118,38 @@ int main(int argc, char *argv []){
         printf("Array b is: \n");
         PrintAry(b, Size);
     }
+
+	/* call our common CUDA initialization utility function. */
+	res = cuda_driver_api_init(&ctx, &mod, "./gaussian.cubin");
+	if (res != CUDA_SUCCESS) {
+		printf("cuda_driver_api_init failed: res = %u\n", res);
+		return -1;
+	}
+
+    // begin timing kernels
+    struct timeval tot_time_start;
+    gettimeofday(&tot_time_start, NULL);
+
+    rt = ForwardSub(mod);
+    if (rt < 0) return -1;
     BackSub();
     if (verbose) {
         printf("The final solution is: \n");
         PrintAry(finalVec,Size);
     }
-    printf("\nTime total (including memory transfers)\t%f sec\n", time_total * 1e-6);
-    printf("Time for CUDA kernels:\t%f sec\n",totalKernelTime * 1e-6);
 
-//    printf("%d,%d\n",size,time_total);
-//    fprintf(stderr,"%d,%d\n",size,time_total);
+	// end timing kernels
+    struct timeval tot_time_end;
+    gettimeofday(&tot_time_end, NULL);
+    total_time = (tot_time_end.tv_sec * 1000000 + tot_time_end.tv_usec) - (tot_time_start.tv_sec * 1000000 + tot_time_start.tv_usec);
+
+    printf("\nTime total (including memory transfers)\t%f sec\n", total_time * 1e-6);
+    printf("Time for CUDA kernels:\t%f sec\n",totalKernelTime * 1e-6);
 
     free(m);
     free(a);
     free(b);
 
-	//=====================================================================
-	//	VARIABLES
-	//=====================================================================
-
-	// CUDA kernel execution parameters
-	int gdx, gdy, bdx, bdy;
-
-	struct timeval tv;
-	CUcontext ctx;
-	CUmodule mod;
-	CUresult res;
-    */
-
-	//=====================================================================
-	// DRIVER EXIT
-	//=====================================================================
 	res = cuda_driver_api_exit(ctx, mod);
 	if (res != CUDA_SUCCESS) {
 		printf("cuda_driver_api_exit failed: res = %u\n", res);
@@ -199,7 +207,6 @@ void PrintMat(float *ary, int nrow, int ncol)
  ** PrintAry() -- Print the contents of the array (vector)
  **------------------------------------------------------
  */
-/*
 void PrintAry(float *ary, int ary_size)
 {
 	int i;
@@ -208,17 +215,6 @@ void PrintAry(float *ary, int ary_size)
 	}
 	printf("\n\n");
 }
-void checkCUDAError(const char *msg)
-{
-    cudaError_t err = cudaGetLastError();
-    if( cudaSuccess != err) 
-    {
-        fprintf(stderr, "Cuda error: %s: %s.\n", msg, 
-                                  cudaGetErrorString( err) );
-        exit(EXIT_FAILURE);
-    }
-}
-*/
 
 /*------------------------------------------------------
  ** InitProblemOnce -- Initialize all of matrices and
@@ -347,16 +343,15 @@ int ForwardSub(CUmodule mod)
     // begin timing kernels
     struct timeval time_start;
     gettimeofday(&time_start, NULL);
+
+    // run kernels
 	for (t=0; t<(Size-1); t++) {
-        // run kernels
 		gaussian_launch(mod, gridSize2d, gridSize2d, blockSize2d, blockSize2d, m_cuda, a_cuda, Size, t);
-		//cudaThreadSynchronize();
-		//Fan2<<<dimGridXY,dimBlockXY>>>(m_cuda,a_cuda,b_cuda,Size,Size-t,t);
-		//cudaThreadSynchronize();
-		//checkCUDAError("Fan2");
+		gaussian_launch2(mod, gridSize2d, gridSize2d, blockSize2d, blockSize2d, m_cuda, a_cuda, b_cuda, Size, Size-t, t);
 	}
+
 	// end timing kernels
-	struct timeval time_end;
+    struct timeval time_end;
     gettimeofday(&time_end, NULL);
     totalKernelTime = (time_end.tv_sec * 1000000 + time_end.tv_usec) - (time_start.tv_sec * 1000000 + time_start.tv_usec);
 
@@ -376,7 +371,6 @@ int ForwardSub(CUmodule mod)
  **------------------------------------------------------
  */
 
-/*
 void BackSub()
 {
 	// create a new vector to hold the final answer
@@ -392,7 +386,6 @@ void BackSub()
 		finalVec[Size-i-1]=finalVec[Size-i-1]/ *(a+Size*(Size-i-1)+(Size-i-1));
 	}
 }
-*/
 
 /*------------------------------------------------------
  ** PrintDeviceProperties
