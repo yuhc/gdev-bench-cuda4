@@ -31,6 +31,7 @@ float *m;
 
 FILE *fp;
 
+void usage(int argc, char *argv[]);
 void InitProblemOnce(char *filename);
 void InitPerRun();
 int ForwardSub(CUmodule mod);
@@ -51,57 +52,58 @@ unsigned int total_time = 0;
 CUresult gaussian_launch(CUmodule mod, int gdx, int gdy, int bdx, int bdy, CUdeviceptr m_cuda,
         CUdeviceptr a_cuda, int Size, int t)
 {
-	void* param[] = {&m_cuda, &a_cuda, &Size, &t};
-	CUfunction f;
-	CUresult res;
+    void* param[] = {&m_cuda, &a_cuda, &Size, &t};
+    CUfunction f;
+    CUresult res;
 
-	res = cuModuleGetFunction(&f, mod, "_Z4Fan1PfS_ii");
-	if (res != CUDA_SUCCESS) {
-		printf("cuModuleGetFunction failed: res = %u\n", res);
-		return res;
-	}
+    res = cuModuleGetFunction(&f, mod, "_Z4Fan1PfS_ii");
+    if (res != CUDA_SUCCESS) {
+        printf("cuModuleGetFunction failed: res = %u\n", res);
+        return res;
+    }
 
-	/* shared memory size is known in the kernel image. */
-	res = cuLaunchKernel(f, gdx, gdy, 1, bdx, bdy, 1, 0, 0, (void**) param, NULL);
-	if (res != CUDA_SUCCESS) {
-		printf("cuLaunchKernel(euclid) failed: res = %u\n", res);
-		return res;
-	}
+    /* shared memory size is known in the kernel image. */
+    res = cuLaunchKernel(f, gdx, gdy, 1, bdx, bdy, 1, 0, 0, (void**) param, NULL);
+    if (res != CUDA_SUCCESS) {
+        printf("cuLaunchKernel(euclid) failed: res = %u\n", res);
+        return res;
+    }
 
-	return CUDA_SUCCESS;
+    return CUDA_SUCCESS;
 }
 
 CUresult gaussian_launch2(CUmodule mod, int gdx, int gdy, int bdx, int bdy, CUdeviceptr m_cuda,
         CUdeviceptr a_cuda, CUdeviceptr b_cuda, int Size, int j1, int t)
 {
-	void* param[] = {&m_cuda, &a_cuda, &b_cuda, &Size, &j1, &t};
-	CUfunction f;
-	CUresult res;
+    void* param[] = {&m_cuda, &a_cuda, &b_cuda, &Size, &j1, &t};
+    CUfunction f;
+    CUresult res;
 
-	res = cuModuleGetFunction(&f, mod, "_Z4Fan2PfS_S_iii");
-	if (res != CUDA_SUCCESS) {
-		printf("cuModuleGetFunction failed: res = %u\n", res);
-		return res;
-	}
+    res = cuModuleGetFunction(&f, mod, "_Z4Fan2PfS_S_iii");
+    if (res != CUDA_SUCCESS) {
+        printf("cuModuleGetFunction failed: res = %u\n", res);
+        return res;
+    }
 
-	/* shared memory size is known in the kernel image. */
-	res = cuLaunchKernel(f, gdx, gdy, 1, bdx, bdy, 1, 0, 0, (void**) param, NULL);
-	if (res != CUDA_SUCCESS) {
-		printf("cuLaunchKernel(euclid) failed: res = %u\n", res);
-		return res;
-	}
+    /* shared memory size is known in the kernel image. */
+    res = cuLaunchKernel(f, gdx, gdy, 1, bdx, bdy, 1, 0, 0, (void**) param, NULL);
+    if (res != CUDA_SUCCESS) {
+        printf("cuLaunchKernel(euclid) failed: res = %u\n", res);
+        return res;
+    }
 
-	return CUDA_SUCCESS;
+    return CUDA_SUCCESS;
 }
 
 int main(int argc, char *argv []){
-	CUcontext ctx;
-	CUmodule mod;
-	CUresult res;
+    CUcontext ctx;
+    CUmodule mod;
+    CUresult res;
     int rt;
 
     int verbose = 1;
 
+    usage(argc, argv);
     InitProblemOnce(argv[1]);
     if (argc > 2) {
         if (!strcmp(argv[2],"-q")) verbose = 0;
@@ -119,12 +121,12 @@ int main(int argc, char *argv []){
         PrintAry(b, Size);
     }
 
-	/* call our common CUDA initialization utility function. */
-	res = cuda_driver_api_init(&ctx, &mod, "./gaussian.cubin");
-	if (res != CUDA_SUCCESS) {
-		printf("cuda_driver_api_init failed: res = %u\n", res);
-		return -1;
-	}
+    /* call our common CUDA initialization utility function. */
+    res = cuda_driver_api_init(&ctx, &mod, "./gaussian.cubin");
+    if (res != CUDA_SUCCESS) {
+        printf("cuda_driver_api_init failed: res = %u\n", res);
+        return -1;
+    }
 
     // begin timing kernels
     struct timeval tot_time_start;
@@ -138,7 +140,7 @@ int main(int argc, char *argv []){
         PrintAry(finalVec,Size);
     }
 
-	// end timing kernels
+    // end timing kernels
     struct timeval tot_time_end;
     gettimeofday(&tot_time_end, NULL);
     total_time = (tot_time_end.tv_sec * 1000000 + tot_time_end.tv_usec) - (tot_time_start.tv_sec * 1000000 + tot_time_start.tv_usec);
@@ -150,13 +152,13 @@ int main(int argc, char *argv []){
     free(a);
     free(b);
 
-	res = cuda_driver_api_exit(ctx, mod);
-	if (res != CUDA_SUCCESS) {
-		printf("cuda_driver_api_exit failed: res = %u\n", res);
-		return -1;
-	}
+    res = cuda_driver_api_exit(ctx, mod);
+    if (res != CUDA_SUCCESS) {
+        printf("cuda_driver_api_exit failed: res = %u\n", res);
+        return -1;
+    }
 
-	return 0;
+    return 0;
 }
 
 void usage(int argc, char *argv[])
@@ -174,14 +176,14 @@ void usage(int argc, char *argv[])
         printf("Example: matrix4.txt:\n");
         printf("4\n");
         printf("\n");
-        printf("-0.6	-0.5	0.7	0.3\n");
-        printf("-0.3	-0.9	0.3	0.7\n");
-        printf("-0.4	-0.5	-0.3	-0.8\n");	
-        printf("0.0	-0.1	0.2	0.9\n");
+        printf("-0.6    -0.5    0.7 0.3\n");
+        printf("-0.3    -0.9    0.3 0.7\n");
+        printf("-0.4    -0.5    -0.3    -0.8\n");   
+        printf("0.0 -0.1    0.2 0.9\n");
         printf("\n");
-        printf("-0.85	-0.68	0.24	-0.53\n");	
+        printf("-0.85   -0.68   0.24    -0.53\n");  
         printf("\n");
-        printf("0.7	0.0	-0.4	-0.5\n");
+        printf("0.7 0.0 -0.4    -0.5\n");
         exit(0);
     }
 }
@@ -192,15 +194,15 @@ void usage(int argc, char *argv[])
  */
 void PrintMat(float *ary, int nrow, int ncol)
 {
-	int i, j;
+    int i, j;
 
-	for (i=0; i<nrow; i++) {
-		for (j=0; j<ncol; j++) {
-			printf("%8.2f ", *(ary+Size*i+j));
-		}
-		printf("\n");
-	}
-	printf("\n");
+    for (i=0; i<nrow; i++) {
+        for (j=0; j<ncol; j++) {
+            printf("%8.2f ", *(ary+Size*i+j));
+        }
+        printf("\n");
+    }
+    printf("\n");
 }
 
 /*------------------------------------------------------
@@ -209,11 +211,11 @@ void PrintMat(float *ary, int nrow, int ncol)
  */
 void PrintAry(float *ary, int ary_size)
 {
-	int i;
-	for (i=0; i<ary_size; i++) {
-		printf("%.2f ", ary[i]);
-	}
-	printf("\n\n");
+    int i;
+    for (i=0; i<ary_size; i++) {
+        printf("%.2f ", ary[i]);
+    }
+    printf("\n\n");
 }
 
 /*------------------------------------------------------
@@ -226,48 +228,48 @@ void PrintAry(float *ary, int ary_size)
  */
 void InitProblemOnce(char *filename)
 {
-	//char *filename = argv[1];
+    //char *filename = argv[1];
 
-	//printf("Enter the data file name: ");
-	//scanf("%s", filename);
-	//printf("The file name is: %s\n", filename);
+    //printf("Enter the data file name: ");
+    //scanf("%s", filename);
+    //printf("The file name is: %s\n", filename);
 
-	fp = fopen(filename, "r");
+    fp = fopen(filename, "r");
 
-	fscanf(fp, "%d", &Size);
+    fscanf(fp, "%d", &Size);
 
-	a = (float *) malloc(Size * Size * sizeof(float));
+    a = (float *) malloc(Size * Size * sizeof(float));
 
-	InitMat(a, Size, Size);
-	//printf("The input matrix a is:\n");
-	//PrintMat(a, Size, Size);
-	b = (float *) malloc(Size * sizeof(float));
+    InitMat(a, Size, Size);
+    //printf("The input matrix a is:\n");
+    //PrintMat(a, Size, Size);
+    b = (float *) malloc(Size * sizeof(float));
 
-	InitAry(b, Size);
-	//printf("The input array b is:\n");
-	//PrintAry(b, Size);
+    InitAry(b, Size);
+    //printf("The input array b is:\n");
+    //PrintAry(b, Size);
 
-	m = (float *) malloc(Size * Size * sizeof(float));
+    m = (float *) malloc(Size * Size * sizeof(float));
 }
 
 void InitMat(float *ary, int nrow, int ncol)
 {
-	int i, j;
+    int i, j;
 
-	for (i=0; i<nrow; i++) {
-		for (j=0; j<ncol; j++) {
-			fscanf(fp, "%f",  ary+Size*i+j);
-		}
-	}
+    for (i=0; i<nrow; i++) {
+        for (j=0; j<ncol; j++) {
+            fscanf(fp, "%f",  ary+Size*i+j);
+        }
+    }
 }
 
 void InitAry(float *ary, int ary_size)
 {
-	int i;
+    int i;
 
-	for (i=0; i<ary_size; i++) {
-		fscanf(fp, "%f",  &ary[i]);
-	}
+    for (i=0; i<ary_size; i++) {
+        fscanf(fp, "%f",  &ary[i]);
+    }
 }
 
 /*------------------------------------------------------
@@ -277,9 +279,9 @@ void InitAry(float *ary, int ary_size)
  */
 void InitPerRun() 
 {
-	int i;
-	for (i=0; i<Size*Size; i++)
-			*(m+i) = 0.0;
+    int i;
+    for (i=0; i<Size*Size; i++)
+            *(m+i) = 0.0;
 }
 
 /*------------------------------------------------------
@@ -289,28 +291,28 @@ void InitPerRun()
  */
 int ForwardSub(CUmodule mod)
 {
-	int t;
+    int t;
     CUdeviceptr m_cuda, a_cuda, b_cuda;
-	CUresult res;
+    CUresult res;
 
-	/* Allocate device memory */
-	res = cuMemAlloc(&m_cuda, sizeof(float) * Size * Size);
-	if (res != CUDA_SUCCESS) {
-		printf("cuMemAlloc failed: res = %u\n", res);
-		return -1;
-	}
+    /* Allocate device memory */
+    res = cuMemAlloc(&m_cuda, sizeof(float) * Size * Size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemAlloc failed: res = %u\n", res);
+        return -1;
+    }
 
-	res = cuMemAlloc(&a_cuda, sizeof(float) * Size * Size);
-	if (res != CUDA_SUCCESS) {
-		printf("cuMemAlloc failed: res = %u\n", res);
-		return -1;
-	}
+    res = cuMemAlloc(&a_cuda, sizeof(float) * Size * Size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemAlloc failed: res = %u\n", res);
+        return -1;
+    }
 
-	res = cuMemAlloc(&b_cuda, sizeof(float) * Size);
-	if (res != CUDA_SUCCESS) {
-		printf("cuMemAlloc failed: res = %u\n", res);
-		return -1;
-	}
+    res = cuMemAlloc(&b_cuda, sizeof(float) * Size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemAlloc failed: res = %u\n", res);
+        return -1;
+    }
 
     /* Copy data from main memory to device memory */
     res = cuMemcpyHtoD(a_cuda, a, sizeof(float) * Size * Size);
@@ -331,38 +333,38 @@ int ForwardSub(CUmodule mod)
         return -1;
     }
 
-	int block_size, grid_size;
-	block_size = MAXBLOCKSIZE;
-	grid_size = (Size/block_size) + (!(Size%block_size)? 0:1);
-	//printf("1d grid size: %d\n",grid_size);
+    int block_size, grid_size;
+    block_size = MAXBLOCKSIZE;
+    grid_size = (Size/block_size) + (!(Size%block_size)? 0:1);
+    //printf("1d grid size: %d\n",grid_size);
 
-	int blockSize2d, gridSize2d;
-	blockSize2d = 4;
-	gridSize2d = (Size/blockSize2d) + (!(Size%blockSize2d?0:1)); 
+    int blockSize2d, gridSize2d;
+    blockSize2d = 4;
+    gridSize2d = (Size/blockSize2d) + (!(Size%blockSize2d?0:1)); 
 
     // begin timing kernels
     struct timeval time_start;
     gettimeofday(&time_start, NULL);
 
     // run kernels
-	for (t=0; t<(Size-1); t++) {
-		gaussian_launch(mod, gridSize2d, gridSize2d, blockSize2d, blockSize2d, m_cuda, a_cuda, Size, t);
-		gaussian_launch2(mod, gridSize2d, gridSize2d, blockSize2d, blockSize2d, m_cuda, a_cuda, b_cuda, Size, Size-t, t);
-	}
+    for (t=0; t<(Size-1); t++) {
+        gaussian_launch(mod, gridSize2d, gridSize2d, blockSize2d, blockSize2d, m_cuda, a_cuda, Size, t);
+        gaussian_launch2(mod, gridSize2d, gridSize2d, blockSize2d, blockSize2d, m_cuda, a_cuda, b_cuda, Size, Size-t, t);
+    }
 
-	// end timing kernels
+    // end timing kernels
     struct timeval time_end;
     gettimeofday(&time_end, NULL);
     totalKernelTime = (time_end.tv_sec * 1000000 + time_end.tv_usec) - (time_start.tv_sec * 1000000 + time_start.tv_usec);
 
     /*
-	// copy memory back to CPU
-	cudaMemcpy(m, m_cuda, Size * Size * sizeof(float),cudaMemcpyDeviceToHost );
-	cudaMemcpy(a, a_cuda, Size * Size * sizeof(float),cudaMemcpyDeviceToHost );
-	cudaMemcpy(b, b_cuda, Size * sizeof(float),cudaMemcpyDeviceToHost );
-	cudaFree(m_cuda);
-	cudaFree(a_cuda);
-	cudaFree(b_cuda);
+    // copy memory back to CPU
+    cudaMemcpy(m, m_cuda, Size * Size * sizeof(float),cudaMemcpyDeviceToHost );
+    cudaMemcpy(a, a_cuda, Size * Size * sizeof(float),cudaMemcpyDeviceToHost );
+    cudaMemcpy(b, b_cuda, Size * sizeof(float),cudaMemcpyDeviceToHost );
+    cudaFree(m_cuda);
+    cudaFree(a_cuda);
+    cudaFree(b_cuda);
     */
 }
 
@@ -373,55 +375,16 @@ int ForwardSub(CUmodule mod)
 
 void BackSub()
 {
-	// create a new vector to hold the final answer
-	finalVec = (float *) malloc(Size * sizeof(float));
-	// solve "bottom up"
-	int i,j;
-	for(i=0;i<Size;i++){
-		finalVec[Size-i-1]=b[Size-i-1];
-		for(j=0;j<i;j++)
-		{
-			finalVec[Size-i-1]-=*(a+Size*(Size-i-1)+(Size-j-1)) * finalVec[Size-j-1];
-		}
-		finalVec[Size-i-1]=finalVec[Size-i-1]/ *(a+Size*(Size-i-1)+(Size-i-1));
-	}
+    // create a new vector to hold the final answer
+    finalVec = (float *) malloc(Size * sizeof(float));
+    // solve "bottom up"
+    int i,j;
+    for(i=0;i<Size;i++){
+        finalVec[Size-i-1]=b[Size-i-1];
+        for(j=0;j<i;j++)
+        {
+            finalVec[Size-i-1]-=*(a+Size*(Size-i-1)+(Size-j-1)) * finalVec[Size-j-1];
+        }
+        finalVec[Size-i-1]=finalVec[Size-i-1]/ *(a+Size*(Size-i-1)+(Size-i-1));
+    }
 }
-
-/*------------------------------------------------------
- ** PrintDeviceProperties
- **-----------------------------------------------------
- */
-/*
-void PrintDeviceProperties(){
-	cudaDeviceProp deviceProp;  
-	int nDevCount = 0;  
-
-	cudaGetDeviceCount( &nDevCount );  
-	printf( "Total Device found: %d", nDevCount );  
-	for (int nDeviceIdx = 0; nDeviceIdx < nDevCount; ++nDeviceIdx )  
-	{  
-	    memset( &deviceProp, 0, sizeof(deviceProp));  
-	    if( cudaSuccess == cudaGetDeviceProperties(&deviceProp, nDeviceIdx))  
-	        {
-				printf( "\nDevice Name \t\t - %s ", deviceProp.name );  
-			    printf( "\n**************************************");  
-			    printf( "\nTotal Global Memory\t\t\t - %lu KB", deviceProp.totalGlobalMem/1024 );  
-			    printf( "\nShared memory available per block \t - %lu KB", deviceProp.sharedMemPerBlock/1024 );  
-			    printf( "\nNumber of registers per thread block \t - %d", deviceProp.regsPerBlock );  
-			    printf( "\nWarp size in threads \t\t\t - %d", deviceProp.warpSize );  
-			    printf( "\nMemory Pitch \t\t\t\t - %zu bytes", deviceProp.memPitch );  
-			    printf( "\nMaximum threads per block \t\t - %d", deviceProp.maxThreadsPerBlock );  
-			    printf( "\nMaximum Thread Dimension (block) \t - %d %d %d", deviceProp.maxThreadsDim[0], deviceProp.maxThreadsDim[1], deviceProp.maxThreadsDim[2] );  
-			    printf( "\nMaximum Thread Dimension (grid) \t - %d %d %d", deviceProp.maxGridSize[0], deviceProp.maxGridSize[1], deviceProp.maxGridSize[2] );  
-			    printf( "\nTotal constant memory \t\t\t - %zu bytes", deviceProp.totalConstMem );  
-			    printf( "\nCUDA ver \t\t\t\t - %d.%d", deviceProp.major, deviceProp.minor );  
-			    printf( "\nClock rate \t\t\t\t - %d KHz", deviceProp.clockRate );  
-			    printf( "\nTexture Alignment \t\t\t - %zu bytes", deviceProp.textureAlignment );  
-			    printf( "\nDevice Overlap \t\t\t\t - %s", deviceProp. deviceOverlap?"Allowed":"Not Allowed" );  
-			    printf( "\nNumber of Multi processors \t\t - %d\n\n", deviceProp.multiProcessorCount );  
-			}  
-	    else  
-	        printf( "\n%s", cudaGetErrorString(cudaGetLastError()));  
-	}  
-}
-*/

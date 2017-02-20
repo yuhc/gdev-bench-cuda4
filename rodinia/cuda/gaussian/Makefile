@@ -12,9 +12,6 @@ CUFILES		:= gaussian_cuda_kernel.cu
 CCFILES		:= gaussian_cuda.c
 
 # init C flags (more options will be added)
-CFLAGS		:=
+CFLAGS		:= -lm
 
 include ../util/gdev.mk
-
-clean:
-	rm gaussian
