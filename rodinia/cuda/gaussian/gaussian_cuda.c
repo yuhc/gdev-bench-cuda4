@@ -333,9 +333,9 @@ int ForwardSub(CUmodule mod)
         return -1;
     }
 
-    int block_size, grid_size;
-    block_size = MAXBLOCKSIZE;
-    grid_size = (Size/block_size) + (!(Size%block_size)? 0:1);
+    //int block_size, grid_size;
+    //block_size = MAXBLOCKSIZE;
+    //grid_size = (Size/block_size) + (!(Size%block_size)? 0:1);
     //printf("1d grid size: %d\n",grid_size);
 
     int blockSize2d, gridSize2d;
@@ -349,7 +349,9 @@ int ForwardSub(CUmodule mod)
     // run kernels
     for (t=0; t<(Size-1); t++) {
         gaussian_launch(mod, gridSize2d, gridSize2d, blockSize2d, blockSize2d, m_cuda, a_cuda, Size, t);
+        cuCtxSynchronize();
         gaussian_launch2(mod, gridSize2d, gridSize2d, blockSize2d, blockSize2d, m_cuda, a_cuda, b_cuda, Size, Size-t, t);
+        cuCtxSynchronize();
     }
 
     // end timing kernels
