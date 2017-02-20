@@ -74,6 +74,9 @@ int main(int argc, char *argv []){
 	CUcontext ctx;
 	CUmodule mod;
 	CUresult res;
+	CUdeviceptr m_cuda;
+	CUdeviceptr a_cuda;
+	CUdeviceptr b_cuda;
 
     int verbose = 1;
 
@@ -91,16 +94,52 @@ int main(int argc, char *argv []){
 	}
 
 	/* Allocate device memory */
-    // TODO
+	res = cuMemAlloc(&m_cuda, sizeof(float) * Size * Size);
+	if (res != CUDA_SUCCESS) {
+		printf("cuMemAlloc failed: res = %u\n", res);
+		return -1;
+	}
 
-    /*
+	res = cuMemAlloc(&a_cuda, sizeof(float) * Size * Size);
+	if (res != CUDA_SUCCESS) {
+		printf("cuMemAlloc failed: res = %u\n", res);
+		return -1;
+	}
+
+	res = cuMemAlloc(&b_cuda, sizeof(float) * Size);
+	if (res != CUDA_SUCCESS) {
+		printf("cuMemAlloc failed: res = %u\n", res);
+		return -1;
+	}
+
     //begin timing
     struct timeval time_start;
     gettimeofday(&time_start, NULL);	
 
-    // run kernels
-    ForwardSub();
+    /* Copy data from main memory to device memory */
+    res = cuMemcpyHtoD(a_cuda, a, sizeof(float) * Size * Size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemcpyHtoD failed: res = %u\n", res);
+        return ;
+    }
 
+    res = cuMemcpyHtoD(b_cuda, b, sizeof(float) * Size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemcpyHtoD failed: res = %u\n", res);
+        return ;
+    }
+
+    res = cuMemcpyHtoD(m_cuda, m, sizeof(float) * Size * Size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemcpyHtoD failed: res = %u\n", res);
+        return ;
+    }
+
+    // run kernels
+    // TODO
+    //ForwardSub();
+
+    /*
     //end timing
     struct timeval time_end;
     gettimeofday(&time_end, NULL);
