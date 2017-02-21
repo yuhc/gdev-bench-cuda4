@@ -79,8 +79,7 @@ fatal(char *s)
     fprintf(stderr, "error: %s\n", s);
 }
 
-CUresult pathfinder_launch(CUmodule mod, int gdx, int gdy, int bdx, int bdy,
-                int iteration,
+CUresult pathfinder_launch(CUmodule mod, int gdx, int bdx, int iteration,
                 CUdeviceptr gpuWall, CUdeviceptr gpuSrc, CUdeviceptr gpuResults,
                 int cols, int rows, int startStep, int border)
 {
@@ -96,7 +95,7 @@ CUresult pathfinder_launch(CUmodule mod, int gdx, int gdy, int bdx, int bdy,
     }
 
     /* shared memory size is known in the kernel image. */
-    res = cuLaunchKernel(f, gdx, gdy, 1, bdx, bdy, 1, 0, 0, (void**) param, NULL);
+    res = cuLaunchKernel(f, gdx, 1, 1, bdx, 1, 1, 0, 0, (void**) param, NULL);
     if (res != CUDA_SUCCESS) {
         printf("cuLaunchKernel(euclid) failed: res = %u\n", res);
         return res;
@@ -117,7 +116,7 @@ int calc_path(CUmodule mod, CUdeviceptr gpuWall, CUdeviceptr gpuResult[2], int r
         int temp = src;
         src = dst;
         dst = temp;
-        pathfinder_launch(mod, blockCols, blockCols, BLOCK_SIZE, BLOCK_SIZE,
+        pathfinder_launch(mod, blockCols, BLOCK_SIZE,
                 MIN(pyramid_height, rows-t-1), gpuWall, gpuResult[src],
                 gpuResult[dst], cols,rows, t, borderCols);
     }
