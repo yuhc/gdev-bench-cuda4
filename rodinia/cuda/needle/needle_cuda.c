@@ -209,6 +209,9 @@ int runTest( int argc, char** argv)
         return -1;
     }
 
+    struct timeval tot_time_start;
+    gettimeofday(&tot_time_start, NULL);
+
     /* Copy data from main memory to device memory */
     res = cuMemcpyHtoD(referrence_cuda, referrence, sizeof(int) * size);
     if (res != CUDA_SUCCESS) {
@@ -246,7 +249,6 @@ int runTest( int argc, char** argv)
     unsigned int totalKernelTime = 0;
     gettimeofday(&time_end, NULL);
     totalKernelTime = (time_end.tv_sec * 1000000 + time_end.tv_usec) - (time_start.tv_sec * 1000000 + time_start.tv_usec);
-    printf("Time for CUDA kernels:\t%f sec\n",totalKernelTime * 1e-6);
 
     /* Copy data from device memory to main memory */
     res = cuMemcpyDtoH(output_itemsets, matrix_cuda, sizeof(int) * size);
@@ -254,6 +256,13 @@ int runTest( int argc, char** argv)
         printf("cuMemcpyHtoD failed: res = %u\n", res);
         return -1;
     }
+
+    struct timeval tot_time_end;
+    unsigned int totalTime = 0;
+    gettimeofday(&tot_time_end, NULL);
+    totalTime = (tot_time_end.tv_sec * 1000000 + tot_time_end.tv_usec) - (tot_time_start.tv_sec * 1000000 + tot_time_start.tv_usec);
+    printf("Time for CUDA kernels:\t%f sec\n",totalKernelTime * 1e-6);
+    printf("Time (Memory Copy and Launch) = \t%f sec\n",totalTime * 1e-6);
 
 //#define TRACEBACK
 #ifdef TRACEBACK

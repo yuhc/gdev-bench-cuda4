@@ -3,13 +3,14 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 OCLDIR=$DIR/cuda
 
-# 10 in total
+# 11 in total
 #  and  does not work
 bm="backprop heartwall bfs gaussian hotspot \
     lud nn pathfinder needle srad/srad_v1 srad/srad_v2"
 
 OUTDIR=$DIR/results
 mkdir $OUTDIR &>/dev/null
+mkdir $OUTDIR/srad &>/dev/null
 
 cd $OCLDIR
 exe() { echo "++ $@" |& tee -a $OUTDIR/$b.txt ; \
@@ -19,10 +20,11 @@ for b in $bm; do
     echo -n > $OUTDIR/$b.txt # clean output file
     echo "$(date) # running $b"
     cd $b
-    for idx in `seq 1 10`; do
+    make
+    for idx in `seq 1 15`; do
         #exe sudo -E perf stat -A -a -e instructions,cache-misses,cache-references,cycles \
         #    ./run
-        exe /usr/bin/time ./run
+        exe sudo /usr/bin/time ./run
         exe echo
     done
     cd $OCLDIR

@@ -166,6 +166,9 @@ int run(int argc, char** argv)
         return -1;
     }
 
+    struct timeval tot_time_start;
+    gettimeofday(&tot_time_start, NULL);
+
     res = cuMemcpyHtoD(gpuResult[0], data, sizeof(int) * cols);
     if (res != CUDA_SUCCESS) {
         printf("cuMemcpyHtoD failed: res = %u\n", res);
@@ -185,6 +188,12 @@ int run(int argc, char** argv)
     int final_ret;
     final_ret = calc_path(mod, gpuWall, gpuResult, rows, cols, pyramid_height, blockCols, borderCols);
 
+    // end timing kernels
+    unsigned int totalKernelTime = 0;
+    struct timeval time_end;
+    gettimeofday(&time_end, NULL);
+    totalKernelTime = (time_end.tv_sec * 1000000 + time_end.tv_usec) - (time_start.tv_sec * 1000000 + time_start.tv_usec);
+
     /* Copy data from device memory to main memory */
     res = cuMemcpyDtoH(result, gpuResult[final_ret], sizeof(float) * cols);
     if (res != CUDA_SUCCESS) {
@@ -193,15 +202,17 @@ int run(int argc, char** argv)
     }
 
     // end timing kernels
-    unsigned int totalKernelTime = 0;
-    struct timeval time_end;
-    gettimeofday(&time_end, NULL);
-    totalKernelTime = (time_end.tv_sec * 1000000 + time_end.tv_usec) - (time_start.tv_sec * 1000000 + time_start.tv_usec);
-    printf("Time for CUDA kernels:\t%f sec\n",totalKernelTime * 1e-6);
+    unsigned int totalTime = 0;
+    struct timeval tot_time_end;
+    gettimeofday(&tot_time_end, NULL);
+    totalTime = (tot_time_end.tv_sec * 1000000 + tot_time_end.tv_usec) - (tot_time_start.tv_sec * 1000000 + tot_time_start.tv_usec);
+    printf("Kernel Time = \t%f sec\n",totalKernelTime * 1e-6);
+    printf("Time (Memory Copy and Launch) = \t%f sec\n",totalTime * 1e-6);
 
-	cuMemFree(gpuWall);
-	cuMemFree(gpuResult[0]);
-	cuMemFree(gpuResult[1]);
+
+    cuMemFree(gpuWall);
+    cuMemFree(gpuResult[0]);
+    cuMemFree(gpuResult[1]);
 
 #ifdef BENCH_PRINT
     for (int i = 0; i < cols; i++)
