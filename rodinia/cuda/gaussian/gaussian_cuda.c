@@ -375,9 +375,11 @@ int ForwardSub(CUmodule mod)
         return -1;
     }
 
-	cuMemFree(m_cuda);
-	cuMemFree(a_cuda);
-	cuMemFree(b_cuda);
+    cuMemFree(m_cuda);
+    cuMemFree(a_cuda);
+    cuMemFree(b_cuda);
+
+    return 0;
 }
 
 /*------------------------------------------------------
