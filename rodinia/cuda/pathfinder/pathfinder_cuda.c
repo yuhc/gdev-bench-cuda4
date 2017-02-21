@@ -2,15 +2,19 @@
 #include <stdlib.h>
 #include <time.h>
 #include <assert.h>
+#include <cuda.h>
+#include "util.h"
+
+#include "pathfinder_cuda.h"
 
 #define BLOCK_SIZE 256
 #define STR_SIZE 256
 #define DEVICE 0
-#define HALO 1 // halo width along one direction when advancing to the next iteration
 
-#define BENCH_PRINT
+//#define BENCH_PRINT
 
-void run(int argc, char** argv);
+void init(int argc, char** argv);
+int run(int argc, char** argv);
 
 int rows, cols;
 int* data;
@@ -19,15 +23,11 @@ int* result;
 #define M_SEED 9
 int pyramid_height;
 
-//#define BENCH_PRINT
-
 int main(int argc, char** argv)
 {
-    int num_devices;
-    cudaGetDeviceCount(&num_devices);
-    if (num_devices > 1) cudaSetDevice(DEVICE);
-
-    run(argc,argv);
+    int rt;
+    rt = run(argc,argv);
+    if (rt < 0) return rt;
 
     return EXIT_SUCCESS;
 }
@@ -43,26 +43,28 @@ init(int argc, char** argv)
                 printf("Usage: dynproc row_len col_len pyramid_height\n");
                 exit(0);
         }
-    data = new int[rows*cols];
-    wall = new int*[rows];
-    for(int n=0; n<rows; n++)
+    data = (int*)malloc(sizeof(int) * rows * cols);
+    wall = (int**)malloc(sizeof(int*) * rows);
+    int n;
+    for(n=0; n<rows; n++)
         wall[n]=data+cols*n;
-    result = new int[cols];
+    result = (int*)malloc(sizeof(int) * cols);
 
     int seed = M_SEED;
     srand(seed);
 
-    for (int i = 0; i < rows; i++)
+    int i, j;
+    for (i = 0; i < rows; i++)
     {
-        for (int j = 0; j < cols; j++)
+        for (j = 0; j < cols; j++)
         {
             wall[i][j] = rand() % 10;
         }
     }
 #ifdef BENCH_PRINT
-    for (int i = 0; i < rows; i++)
+    for (i = 0; i < rows; i++)
     {
-        for (int j = 0; j < cols; j++)
+        for (j = 0; j < cols; j++)
         {
             printf("%d ",wall[i][j]) ;
         }
@@ -71,16 +73,16 @@ init(int argc, char** argv)
 #endif
 }
 
-void 
+void
 fatal(char *s)
 {
     fprintf(stderr, "error: %s\n", s);
-
 }
 
 /*
    compute N time steps
 */
+/*
 int calc_path(int *gpuWall, int *gpuResult[2], int rows, int cols, \
      int pyramid_height, int blockCols, int borderCols)
 {
@@ -99,10 +101,22 @@ int calc_path(int *gpuWall, int *gpuResult[2], int rows, int cols, \
     }
         return dst;
 }
+*/
 
-void run(int argc, char** argv)
+int run(int argc, char** argv)
 {
     init(argc, argv);
+
+    CUcontext ctx;
+    CUmodule mod;
+    CUresult res;
+
+    /* call our common CUDA initialization utility function. */
+    res = cuda_driver_api_init(&ctx, &mod, "./pathfinder.cubin");
+    if (res != CUDA_SUCCESS) {
+        printf("cuda_driver_api_init failed: res = %u\n", res);
+        return -1;
+    }
 
     /* --------------- pyramid parameters --------------- */
     int borderCols = (pyramid_height)*HALO;
@@ -111,22 +125,63 @@ void run(int argc, char** argv)
 
     printf("pyramidHeight: %d\ngridSize: [%d]\nborder:[%d]\nblockSize: %d\nblockGrid:[%d]\ntargetBlock:[%d]\n",\
     pyramid_height, cols, borderCols, BLOCK_SIZE, blockCols, smallBlockCol);
-    
-    int *gpuWall, *gpuResult[2];
+
+    CUdeviceptr gpuWall, gpuResult[2];
     int size = rows*cols;
 
-    cudaMalloc((void**)&gpuResult[0], sizeof(int)*cols);
-    cudaMalloc((void**)&gpuResult[1], sizeof(int)*cols);
-    cudaMemcpy(gpuResult[0], data, sizeof(int)*cols, cudaMemcpyHostToDevice);
-    cudaMalloc((void**)&gpuWall, sizeof(int)*(size-cols));
-    cudaMemcpy(gpuWall, data+cols, sizeof(int)*(size-cols), cudaMemcpyHostToDevice);
+    res = cuMemAlloc(&gpuResult[0], sizeof(int) * cols);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemAlloc failed: res = %u\n", res);
+        return -1;
+    }
 
+    res = cuMemAlloc(&gpuResult[1], sizeof(int) * cols);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemAlloc failed: res = %u\n", res);
+        return -1;
+    }
+    res = cuMemAlloc(&gpuWall, sizeof(int) * (size - cols));
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemAlloc failed: res = %u\n", res);
+        return -1;
+    }
 
-    int final_ret = calc_path(gpuWall, gpuResult, rows, cols, \
-     pyramid_height, blockCols, borderCols);
+    res = cuMemcpyHtoD(gpuResult[0], data, sizeof(int) * cols);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemcpyHtoD failed: res = %u\n", res);
+        return -1;
+    }
 
-    cudaMemcpy(result, gpuResult[final_ret], sizeof(int)*cols, cudaMemcpyDeviceToHost);
+    res = cuMemcpyHtoD(gpuWall, data+cols, sizeof(int) * (size - cols));
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemcpyHtoD failed: res = %u\n", res);
+        return -1;
+    }
 
+    // begin timing kernels
+    struct timeval time_start;
+    gettimeofday(&time_start, NULL);
+
+    int final_ret;
+    //final_ret = calc_path(gpuWall, gpuResult, rows, cols, pyramid_height, blockCols, borderCols);
+
+    /* Copy data from device memory to main memory */
+    res = cuMemcpyDtoH(result, gpuResult[final_ret], sizeof(float) * cols);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemcpyHtoD failed: res = %u\n", res);
+        return -1;
+    }
+
+    // end timing kernels
+    unsigned int totalKernelTime = 0;
+    struct timeval time_end;
+    gettimeofday(&time_end, NULL);
+    totalKernelTime = (time_end.tv_sec * 1000000 + time_end.tv_usec) - (time_start.tv_sec * 1000000 + time_start.tv_usec);
+    printf("Time for CUDA kernels:\t%f sec\n",totalKernelTime * 1e-6);
+
+	cuMemFree(gpuWall);
+	cuMemFree(gpuResult[0]);
+	cuMemFree(gpuResult[1]);
 
 #ifdef BENCH_PRINT
     for (int i = 0; i < cols; i++)
@@ -137,14 +192,15 @@ void run(int argc, char** argv)
     printf("\n") ;
 #endif
 
+    free(data);
+    free(wall);
+    free(result);
 
-    cudaFree(gpuWall);
-    cudaFree(gpuResult[0]);
-    cudaFree(gpuResult[1]);
+    res = cuda_driver_api_exit(ctx, mod);
+    if (res != CUDA_SUCCESS) {
+        printf("cuda_driver_api_exit failed: res = %u\n", res);
+        return -1;
+    }
 
-    delete [] data;
-    delete [] wall;
-    delete [] result;
-
+    return 0;
 }
-
