@@ -3,16 +3,15 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#include <needle.h>
 #include <cuda.h>
 #include <sys/time.h>
 
-// includes, kernels
-#include <needle_kernel.cu>
+#include "needle_cuda.h"
+#include "util.h"
 
 ////////////////////////////////////////////////////////////////////////////////
 // declaration, forward
-void runTest( int argc, char** argv);
+int runTest( int argc, char** argv);
 
 
 int blosum62[24][24] = {
@@ -54,7 +53,8 @@ double gettime() {
 int
 main( int argc, char** argv) 
 {
-    runTest( argc, argv);
+    int rt = runTest( argc, argv);
+    if (rt < 0) return rt;
 
     return EXIT_SUCCESS;
 }
@@ -67,14 +67,60 @@ void usage(int argc, char **argv)
 	exit(1);
 }
 
-void runTest( int argc, char** argv) 
+CUresult needle_launch(CUmodule mod, int gdx, int gdy, int bdx, int bdy,
+        CUdeviceptr referrence_cuda, CUdeviceptr matrix_cuda, CUdeviceptr matrix_cuda_out,
+        int max_cols, int penalty, int i, int block_width)
+{
+    void* param[] = {&referrence_cuda, &matrix_cuda, &matrix_cuda_out, &max_cols, &penalty, &i, &block_width};
+    CUfunction f;
+    CUresult res;
+
+    res = cuModuleGetFunction(&f, mod, "_Z20needle_cuda_shared_1PiS_S_iiii");
+    if (res != CUDA_SUCCESS) {
+        printf("cuModuleGetFunction failed: res = %u\n", res);
+        return res;
+    }
+
+    /* shared memory size is known in the kernel image. */
+    res = cuLaunchKernel(f, gdx, gdy, 1, bdx, bdy, 1, 0, 0, (void**) param, NULL);
+    if (res != CUDA_SUCCESS) {
+        printf("cuLaunchKernel(euclid) failed: res = %u\n", res);
+        return res;
+    }
+
+    return CUDA_SUCCESS;
+}
+
+CUresult needle_launch2(CUmodule mod, int gdx, int gdy, int bdx, int bdy,
+        CUdeviceptr referrence_cuda, CUdeviceptr matrix_cuda, CUdeviceptr matrix_cuda_out,
+        int max_cols, int penalty, int i, int block_width)
+{
+    void* param[] = {&referrence_cuda, &matrix_cuda, &matrix_cuda_out, &max_cols, &penalty, &i, &block_width};
+    CUfunction f;
+    CUresult res;
+
+    res = cuModuleGetFunction(&f, mod, "_Z20needle_cuda_shared_2PiS_S_iiii");
+    if (res != CUDA_SUCCESS) {
+        printf("cuModuleGetFunction failed: res = %u\n", res);
+        return res;
+    }
+
+    /* shared memory size is known in the kernel image. */
+    res = cuLaunchKernel(f, gdx, gdy, 1, bdx, bdy, 1, 0, 0, (void**) param, NULL);
+    if (res != CUDA_SUCCESS) {
+        printf("cuLaunchKernel(euclid) failed: res = %u\n", res);
+        return res;
+    }
+
+    return CUDA_SUCCESS;
+}
+
+int runTest( int argc, char** argv) 
 {
     int max_rows, max_cols, penalty;
     int *input_itemsets, *output_itemsets, *referrence;
-	int *matrix_cuda, *matrix_cuda_out, *referrence_cuda;
 	int size;
-	
-    
+
     // the lengths of the two sequences should be able to divided by 16.
 	// And at current stage  max_rows needs to equal max_cols
 	if (argc == 3)
@@ -86,92 +132,134 @@ void runTest( int argc, char** argv)
     else{
 	usage(argc, argv);
     }
-	
+
 	if(atoi(argv[1])%16!=0){
 	fprintf(stderr,"The dimension values must be a multiple of 16\n");
 	exit(1);
 	}
-	
 
 	max_rows = max_rows + 1;
 	max_cols = max_cols + 1;
 	referrence = (int *)malloc( max_rows * max_cols * sizeof(int) );
     input_itemsets = (int *)malloc( max_rows * max_cols * sizeof(int) );
 	output_itemsets = (int *)malloc( max_rows * max_cols * sizeof(int) );
-	
 
 	if (!input_itemsets)
 		fprintf(stderr, "error: can not allocate memory");
 
     srand ( 7 );
-	
-	
-    for (int i = 0 ; i < max_cols; i++){
-		for (int j = 0 ; j < max_rows; j++){
+
+    int i, j;
+    for (i = 0 ; i < max_cols; i++){
+		for (j = 0 ; j < max_rows; j++){
 			input_itemsets[i*max_cols+j] = 0;
 		}
 	}
-	
+
 	printf("Start Needleman-Wunsch\n");
-	
-	for( int i=1; i< max_rows ; i++){    //please define your own sequence. 
+
+	for(i=1; i< max_rows ; i++){    //please define your own sequence.
        input_itemsets[i*max_cols] = rand() % 10 + 1;
 	}
-    for( int j=1; j< max_cols ; j++){    //please define your own sequence.
+    for(j=1; j< max_cols ; j++){    //please define your own sequence.
        input_itemsets[j] = rand() % 10 + 1;
 	}
 
-
-	for (int i = 1 ; i < max_cols; i++){
-		for (int j = 1 ; j < max_rows; j++){
+	for (i = 1 ; i < max_cols; i++){
+		for (j = 1 ; j < max_rows; j++){
 		referrence[i*max_cols+j] = blosum62[input_itemsets[i*max_cols]][input_itemsets[j]];
 		}
 	}
 
-    for( int i = 1; i< max_rows ; i++)
+    for(i = 1; i< max_rows ; i++)
        input_itemsets[i*max_cols] = -i * penalty;
-	for( int j = 1; j< max_cols ; j++)
+	for(j = 1; j< max_cols ; j++)
        input_itemsets[j] = -j * penalty;
 
+    /* call our common CUDA initialization utility function. */
+    CUcontext ctx;
+    CUmodule mod;
+    CUresult res;
+    CUdeviceptr referrence_cuda, matrix_cuda, matrix_cuda_out;
+
+    res = cuda_driver_api_init(&ctx, &mod, "./needle.cubin");
+    if (res != CUDA_SUCCESS) {
+        printf("cuda_driver_api_init failed: res = %u\n", res);
+        return -1;
+    }
 
     size = max_cols * max_rows;
-	cudaMalloc((void**)& referrence_cuda, sizeof(int)*size);
-	cudaMalloc((void**)& matrix_cuda, sizeof(int)*size);
-	cudaMalloc((void**)& matrix_cuda_out, sizeof(int)*size);
-	
-	cudaMemcpy(referrence_cuda, referrence, sizeof(int) * size, cudaMemcpyHostToDevice);
-	cudaMemcpy(matrix_cuda, input_itemsets, sizeof(int) * size, cudaMemcpyHostToDevice);
 
-    dim3 dimGrid;
-	dim3 dimBlock(BLOCK_SIZE, 1);
+    /* Allocate device memory */
+    res = cuMemAlloc(&referrence_cuda, sizeof(int) * size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemAlloc failed: res = %u\n", res);
+        return -1;
+    }
+
+    res = cuMemAlloc(&matrix_cuda, sizeof(int) * size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemAlloc failed: res = %u\n", res);
+        return -1;
+    }
+
+    res = cuMemAlloc(&matrix_cuda_out, sizeof(int) * size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemAlloc failed: res = %u\n", res);
+        return -1;
+    }
+
+    /* Copy data from main memory to device memory */
+    res = cuMemcpyHtoD(referrence_cuda, referrence, sizeof(int) * size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemcpyHtoD failed: res = %u\n", res);
+        return -1;
+    }
+
+    res = cuMemcpyHtoD(matrix_cuda, input_itemsets, sizeof(int) * size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemcpyHtoD failed: res = %u\n", res);
+        return -1;
+    }
+
 	int block_width = ( max_cols - 1 )/BLOCK_SIZE;
 
+    // begin timing kernels
+    struct timeval time_start;
+    gettimeofday(&time_start, NULL);
 	printf("Processing top-left matrix\n");
+
 	//process top-left matrix
-	for( int i = 1 ; i <= block_width ; i++){
-		dimGrid.x = i;
-		dimGrid.y = 1;
-		needle_cuda_shared_1<<<dimGrid, dimBlock>>>(referrence_cuda, matrix_cuda, matrix_cuda_out
-		                                      ,max_cols, penalty, i, block_width); 
+	for(i = 1 ; i <= block_width ; i++){
+        needle_launch(mod, i, 1, BLOCK_SIZE, 1, referrence_cuda, matrix_cuda,
+                matrix_cuda_out, max_cols, penalty, i, block_width);
 	}
 	printf("Processing bottom-right matrix\n");
     //process bottom-right matrix
-	for( int i = block_width - 1  ; i >= 1 ; i--){
-		dimGrid.x = i;
-		dimGrid.y = 1;
-		needle_cuda_shared_2<<<dimGrid, dimBlock>>>(referrence_cuda, matrix_cuda, matrix_cuda_out
-		                                      ,max_cols, penalty, i, block_width); 
+	for(i = block_width - 1  ; i >= 1 ; i--){
+        needle_launch2(mod, i, 1, BLOCK_SIZE, 1, referrence_cuda, matrix_cuda,
+                matrix_cuda_out, max_cols, penalty, i, block_width);
 	}
 
+    // end timing kernels
+    struct timeval time_end;
+    unsigned int totalKernelTime = 0;
+    gettimeofday(&time_end, NULL);
+    totalKernelTime = (time_end.tv_sec * 1000000 + time_end.tv_usec) - (time_start.tv_sec * 1000000 + time_start.tv_usec);
+    printf("Time for CUDA kernels:\t%f sec\n",totalKernelTime * 1e-6);
 
-    cudaMemcpy(output_itemsets, matrix_cuda, sizeof(int) * size, cudaMemcpyDeviceToHost);
-	
+    /* Copy data from device memory to main memory */
+    res = cuMemcpyDtoH(output_itemsets, matrix_cuda, sizeof(int) * size);
+    if (res != CUDA_SUCCESS) {
+        printf("cuMemcpyHtoD failed: res = %u\n", res);
+        return -1;
+    }
+
 //#define TRACEBACK
 #ifdef TRACEBACK
-	
 	FILE *fpo = fopen("result.txt","w");
 	fprintf(fpo, "print traceback value GPU:\n");
-    
+
 	for (int i = max_rows - 2,  j = max_rows - 2; i>=0, j>=0;){
 		int nw, n, w, traceback;
 		if ( i == max_rows - 2 && j == max_rows - 2 )
@@ -199,7 +287,7 @@ void runTest( int argc, char** argv)
 		new_nw = nw + referrence[i * max_cols + j];
 		new_w = w - penalty;
 		new_n = n - penalty;
-		
+
 		traceback = maximum(new_nw, new_w, new_n);
 		if(traceback == new_nw)
 			traceback = nw;
@@ -207,7 +295,7 @@ void runTest( int argc, char** argv)
 			traceback = w;
 		if(traceback == new_n)
             traceback = n;
-			
+
 		fprintf(fpo, "%d ", traceback);
 
 		if(traceback == nw )
@@ -222,18 +310,18 @@ void runTest( int argc, char** argv)
 		else
 		;
 	}
-	
-	fclose(fpo);
 
+	fclose(fpo);
 #endif
 
-	cudaFree(referrence_cuda);
-	cudaFree(matrix_cuda);
-	cudaFree(matrix_cuda_out);
+	cuMemFree(referrence_cuda);
+	cuMemFree(matrix_cuda);
+	cuMemFree(matrix_cuda_out);
 
 	free(referrence);
 	free(input_itemsets);
 	free(output_itemsets);
-	
+
+    return 0;
 }
 
