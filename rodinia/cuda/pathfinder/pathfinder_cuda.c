@@ -79,29 +79,50 @@ fatal(char *s)
     fprintf(stderr, "error: %s\n", s);
 }
 
+CUresult pathfinder_launch(CUmodule mod, int gdx, int gdy, int bdx, int bdy,
+                int iteration,
+                CUdeviceptr gpuWall, CUdeviceptr gpuSrc, CUdeviceptr gpuResults,
+                int cols, int rows, int startStep, int border)
+{
+    void* param[] = {&iteration, &gpuWall, &gpuSrc, &gpuResults, &cols, &rows,
+        &startStep, &border};
+    CUfunction f;
+    CUresult res;
+
+    res = cuModuleGetFunction(&f, mod, "_Z14dynproc_kerneliPis_S_iiii");
+    if (res != CUDA_SUCCESS) {
+        printf("cuModuleGetFunction failed: res = %u\n", res);
+        return res;
+    }
+
+    /* shared memory size is known in the kernel image. */
+    res = cuLaunchKernel(f, gdx, gdy, 1, bdx, bdy, 1, 0, 0, (void**) param, NULL);
+    if (res != CUDA_SUCCESS) {
+        printf("cuLaunchKernel(euclid) failed: res = %u\n", res);
+        return res;
+    }
+
+    return CUDA_SUCCESS;
+}
+
 /*
    compute N time steps
 */
-/*
-int calc_path(int *gpuWall, int *gpuResult[2], int rows, int cols, \
+int calc_path(CUmodule mod, CUdeviceptr gpuWall, CUdeviceptr gpuResult[2], int rows, int cols, \
      int pyramid_height, int blockCols, int borderCols)
 {
-        dim3 dimBlock(BLOCK_SIZE);
-        dim3 dimGrid(blockCols);
-
-        int src = 1, dst = 0;
-    for (int t = 0; t < rows-1; t+=pyramid_height) {
-            int temp = src;
-            src = dst;
-            dst = temp;
-            dynproc_kernel<<<dimGrid, dimBlock>>>(
-                MIN(pyramid_height, rows-t-1), 
-                gpuWall, gpuResult[src], gpuResult[dst],
-                cols,rows, t, borderCols);
+    int src = 1, dst = 0;
+    int t;
+    for (t = 0; t < rows-1; t+=pyramid_height) {
+        int temp = src;
+        src = dst;
+        dst = temp;
+        pathfinder_launch(mod, blockCols, blockCols, BLOCK_SIZE, BLOCK_SIZE,
+                MIN(pyramid_height, rows-t-1), gpuWall, gpuResult[src],
+                gpuResult[dst], cols,rows, t, borderCols);
     }
-        return dst;
+    return dst;
 }
-*/
 
 int run(int argc, char** argv)
 {
@@ -163,7 +184,7 @@ int run(int argc, char** argv)
     gettimeofday(&time_start, NULL);
 
     int final_ret;
-    //final_ret = calc_path(gpuWall, gpuResult, rows, cols, pyramid_height, blockCols, borderCols);
+    final_ret = calc_path(mod, gpuWall, gpuResult, rows, cols, pyramid_height, blockCols, borderCols);
 
     /* Copy data from device memory to main memory */
     res = cuMemcpyDtoH(result, gpuResult[final_ret], sizeof(float) * cols);
