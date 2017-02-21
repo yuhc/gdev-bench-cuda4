@@ -362,17 +362,17 @@ int ForwardSub(CUmodule mod)
     res = cuMemcpyDtoH(m, m_cuda, sizeof(float) * Size * Size);
     if (res != CUDA_SUCCESS) {
         printf("cuMemcpyHtoD failed: res = %u\n", res);
-        return ;
+        return -1;
     }
     res = cuMemcpyDtoH(a, a_cuda, sizeof(float) * Size * Size);
     if (res != CUDA_SUCCESS) {
         printf("cuMemcpyHtoD failed: res = %u\n", res);
-        return ;
+        return -1;
     }
     res = cuMemcpyDtoH(b, b_cuda, sizeof(float) * Size);
     if (res != CUDA_SUCCESS) {
         printf("cuMemcpyHtoD failed: res = %u\n", res);
-        return ;
+        return -1;
     }
 
 	cuMemFree(m_cuda);

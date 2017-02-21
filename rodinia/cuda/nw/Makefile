@@ -5,7 +5,7 @@
 # A path to CUDA top directory
 CUDA_TOP_DIR	:= ..
 # An executable name
-EXECUTABLE	:= nw
+EXECUTABLE	:= needle
 # Cuda source files (compiled with nvcc)
 CUFILES		:= needle_cuda_kernel.cu
 # C/C++ source files (compiled with gcc / c++)

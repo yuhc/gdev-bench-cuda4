@@ -6,7 +6,7 @@ OCLDIR=$DIR/cuda
 # 10 in total
 #  and  does not work
 bm="backprop heartwall bfs gaussian hotspot \
-    lud nn srad/srad_v1 srad/srad_v2"
+    lud nn pathfinder needle srad/srad_v1 srad/srad_v2"
 
 OUTDIR=$DIR/results
 mkdir $OUTDIR &>/dev/null

@@ -1,5 +1,4 @@
-
-#include <needle.h>
+#include "needle_cuda.h"
 #include <stdio.h>
 
 
