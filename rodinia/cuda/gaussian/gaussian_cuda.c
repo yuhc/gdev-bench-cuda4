@@ -101,7 +101,7 @@ int main(int argc, char *argv []){
     CUresult res;
     int rt;
 
-    int verbose = 1;
+    int verbose = 0;
 
     usage(argc, argv);
     InitProblemOnce(argv[1]);
@@ -151,6 +151,7 @@ int main(int argc, char *argv []){
     free(m);
     free(a);
     free(b);
+    free(finalVec);
     res = cuda_driver_api_exit(ctx, mod);
     if (res != CUDA_SUCCESS) {
         printf("cuda_driver_api_exit failed: res = %u\n", res);
