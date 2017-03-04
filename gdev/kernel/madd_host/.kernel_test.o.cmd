@@ -1,0 +1,1 @@
+cmd_/home/hyu/Projects/gdev/test/cuda/kernel/madd_host/kernel_test.o := ld -m elf_x86_64   -r -o /home/hyu/Projects/gdev/test/cuda/kernel/madd_host/kernel_test.o /home/hyu/Projects/gdev/test/cuda/kernel/madd_host/main.o /home/hyu/Projects/gdev/test/cuda/kernel/madd_host/madd_host.o 

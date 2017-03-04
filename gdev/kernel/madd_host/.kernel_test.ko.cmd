@@ -1,0 +1,1 @@
+cmd_/home/hyu/Projects/gdev/test/cuda/kernel/madd_host/kernel_test.ko := ld -r -m elf_x86_64 -T /home/hyu/Projects/gdev/linux-3.6.5-for-gxen/scripts/module-common.lds --build-id  -o /home/hyu/Projects/gdev/test/cuda/kernel/madd_host/kernel_test.ko /home/hyu/Projects/gdev/test/cuda/kernel/madd_host/kernel_test.o /home/hyu/Projects/gdev/test/cuda/kernel/madd_host/kernel_test.mod.o
