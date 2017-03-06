@@ -304,7 +304,7 @@ void run(int argc, char** argv)
 	}
 
 	gettimeofday(&tv_total_end, NULL);
-	tvsub(&tv_total_end, &tv_close_start, &tv);
+	tvsub(&tv_total_end, &tv_d2h_end, &tv);
 	close_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	tvsub(&tv_total_end, &tv_total_start, &tv);

@@ -20,6 +20,21 @@ static struct option long_options[] = {
 	{0,0,0,0}
 };
 
+struct timeval tv;
+struct timeval tv_total_start, tv_total_end;
+float total;
+struct timeval tv_h2d_start, tv_h2d_end;
+float h2d;
+struct timeval tv_d2h_start, tv_d2h_end;
+float d2h;
+struct timeval tv_exec_start, tv_exec_end;
+struct timeval tv_mem_alloc_start;
+struct timeval tv_close_start;
+float mem_alloc;
+float exec;
+float init_gpu;
+float close_gpu;
+
 int lud_launch(CUmodule mod, CUdeviceptr m, int matrix_dim)
 {
 	int i = 0;
@@ -98,7 +113,7 @@ int lud_launch(CUmodule mod, CUdeviceptr m, int matrix_dim)
 		printf("cuLaunchKernel(f_diagonal) failed: res = %u\n", res);
 		return 0;
 	}
-	
+
 	free(m_debug);
 
 	return 0;
@@ -112,7 +127,6 @@ int main (int argc, char *argv[])
 	const char *input_file = NULL;
 	const char *cubin_file = NULL;
 	float *m, *mm;
-	struct timeval tv;
 	CUdeviceptr d_m;
 	CUcontext ctx;
 	CUmodule mod;
@@ -185,11 +199,16 @@ int main (int argc, char *argv[])
 	/*
 	 * call our common CUDA initialization utility function.
 	 */
+	gettimeofday(&tv_total_start, NULL);
 	res = cuda_driver_api_init(&ctx, &mod, cubin_file);
 	if (res != CUDA_SUCCESS) {
 		printf("cuda_driver_api_init failed: res = %u\n", res);
 		return -1;
 	}
+
+    gettimeofday(&tv_mem_alloc_start, NULL);
+	tvsub(&tv_mem_alloc_start, &tv_total_start, &tv);
+	init_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	res = cuMemAlloc(&d_m, matrix_dim * matrix_dim * sizeof(float));
 	if (res != CUDA_SUCCESS) {
@@ -197,29 +216,35 @@ int main (int argc, char *argv[])
 		return -1;
 	}
 
-	/*
-	 * measurement start!
-	 */
-	time_measure_start(&tv);
+    gettimeofday(&tv_h2d_start, NULL);
+    tvsub(&tv_h2d_start, &tv_mem_alloc_start, &tv);
+	mem_alloc = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
-	res = cuMemcpyHtoD(d_m, m, matrix_dim * matrix_dim * sizeof(float));
+    res = cuMemcpyHtoD(d_m, m, matrix_dim * matrix_dim * sizeof(float));
 	if (res != CUDA_SUCCESS) {
 		printf("cuMemcpyHtoD (a) failed: res = %u\n", res);
 		return -1;
 	}
-	
+
+    gettimeofday(&tv_h2d_end, NULL);
+    tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
+    h2d = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
 	lud_launch(mod, d_m, matrix_dim);
-	
+
+    gettimeofday(&tv_exec_end, NULL);
+    tvsub(&tv_exec_end, &tv_h2d_end, &tv);
+    exec = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
 	res = cuMemcpyDtoH(m, d_m, matrix_dim * matrix_dim * sizeof(float));
 	if (res != CUDA_SUCCESS) {
 		printf("cuMemcpyDtoH failed: res = %u\n", res);
 		return -1;
 	}
-	
-	/*
-	 * measurement end! will print out the time.
-	 */
-	time_measure_end(&tv);
+
+	gettimeofday(&tv_d2h_end, NULL);
+    tvsub(&tv_d2h_end, &tv_exec_end, &tv);
+	d2h += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	res = cuMemFree(d_m);
 	if (res != CUDA_SUCCESS) {
@@ -232,6 +257,20 @@ int main (int argc, char *argv[])
 		printf("cuda_driver_api_exit faild: res = %u\n", res);
 		return -1;
 	}
+	gettimeofday(&tv_total_end, NULL);
+	tvsub(&tv_total_end, &tv_close_start, &tv);
+	close_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	tvsub(&tv_total_end, &tv_total_start, &tv);
+	total = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	printf("Init: %f\n", init_gpu);
+	printf("MemAlloc: %f\n", mem_alloc);
+	printf("HtoD: %f\n", h2d);
+	printf("Exec: %f\n", exec);
+	printf("DtoH: %f\n", d2h);
+	printf("Close: %f\n", close_gpu);
+	printf("Total: %f\n", total);
 
 	if (do_verify){
 		print_matrix(m, matrix_dim);
@@ -239,8 +278,8 @@ int main (int argc, char *argv[])
 		lud_verify(mm, m, matrix_dim); 
 		free(mm);
 	}
-	
+
 	free(m);
-	
+
 	return EXIT_SUCCESS;
 }				/* ----------  end of function main  ---------- */
