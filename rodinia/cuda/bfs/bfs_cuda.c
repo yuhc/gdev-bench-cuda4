@@ -31,6 +31,22 @@ int no_of_nodes;
 int edge_list_size;
 FILE *fp;
 
+struct timeval tv;
+struct timeval tv_total_start, tv_total_end;
+float total;
+struct timeval tv_h2d_start, tv_h2d_end;
+float h2d;
+struct timeval tv_d2h_start, tv_d2h_end;
+float d2h;
+struct timeval tv_exec_start, tv_exec_end;
+struct timeval tv_mem_alloc_start;
+struct timeval tv_close_start;
+float mem_alloc;
+float exec;
+float init_gpu;
+float close_gpu;
+float data_read;
+
 int bfs_launch
 (CUmodule mod, int nr_blocks, int nr_threads_per_block, int nr_nodes,
  CUdeviceptr d_over, CUdeviceptr d_graph_nodes, CUdeviceptr d_graph_edges, 
@@ -47,6 +63,7 @@ int bfs_launch
 	bdy = 1;
 	gdx = nr_blocks;
 	gdy = 1;
+    exec = 0;
 
 	/* get functions. */
 	res = cuModuleGetFunction(&f1, mod, "_Z6KernelP4NodePiS1_S1_S1_S1_i");
@@ -63,14 +80,19 @@ int bfs_launch
 	/* Call the Kernel untill all the elements of Frontier are not false */
 	do {
 		/* if no thread changes this value then the loop stops */
+	    gettimeofday(&tv_h2d_start, NULL);
 		stop = false;
 		res = cuMemcpyHtoD(d_over, &stop, sizeof(int));
 		if (res != CUDA_SUCCESS) {
 			printf("cuMemcpyHtoD(d_over) failed\n");
 			return -1;
 		}
+	    gettimeofday(&tv_h2d_end, NULL);
+    	tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
+	    h2d += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 		/* f1 */
+	    gettimeofday(&tv_exec_start, NULL);
 		void *param1[] = {&d_graph_nodes, &d_graph_edges, &d_graph_mask, 
 						  &d_updating_graph_mask, &d_graph_visited, &d_cost,
 						  &nr_nodes};
@@ -82,7 +104,7 @@ int bfs_launch
         }
 		cuCtxSynchronize();
 		/* check if kernel execution generated and error */
-		
+
 		/* f2 */
 		void *param2[] = {&d_graph_mask, &d_updating_graph_mask, 
 						  &d_graph_visited, &d_over,  &nr_nodes};
@@ -93,12 +115,18 @@ int bfs_launch
             return -1;
         }
 		/* check if kernel execution generated and error */
+	    gettimeofday(&tv_exec_end, NULL);
+    	tvsub(&tv_exec_end, &tv_exec_start, &tv);
+    	exec += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 		res = cuMemcpyDtoH(&stop, d_over, sizeof(int));
 		if (res != CUDA_SUCCESS) {
 			printf("cuMemcpyDtoH(stop) failed: res = %u\n", res);
 			return -1;
 		}
+	    gettimeofday(&tv_d2h_end, NULL);
+    	tvsub(&tv_d2h_end, &tv_exec_end, &tv);
+	    d2h += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 		cuCtxSynchronize();
 		k++;
@@ -205,11 +233,16 @@ int BFSGraph(int argc, char** argv)
 	/*
 	 * call our common CUDA initialization utility function.
 	 */
+	gettimeofday(&tv_total_start, NULL);
 	res = cuda_driver_api_init(&ctx, &mod, "./bfs.cubin");
 	if (res != CUDA_SUCCESS) {
 		printf("cuda_driver_api_init failed: res = %u\n", res);
 		return -1;
 	}
+
+    gettimeofday(&tv_mem_alloc_start, NULL);
+	tvsub(&tv_mem_alloc_start, &tv_total_start, &tv);
+	init_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	/*
 	 * allocate device memory space
@@ -251,10 +284,9 @@ int BFSGraph(int argc, char** argv)
 		return -1;
 	}
 
-	/*
-	 * measurement start!
-	 */
-	time_measure_start(&tv);
+	gettimeofday(&tv_h2d_start, NULL);
+    tvsub(&tv_h2d_start, &tv_mem_alloc_start, &tv);
+	mem_alloc = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	/* copy the node list to device memory */
 	res = cuMemcpyHtoD(d_graph_nodes, h_graph_nodes, sizeof(struct Node) * no_of_nodes);
@@ -291,22 +323,25 @@ int BFSGraph(int argc, char** argv)
 		printf("cuMemcpyHtoD failed: res = %u\n", res);
 		return -1;
 	}
+	gettimeofday(&tv_h2d_end, NULL);
+	tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
+	h2d = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+    d2h = 0;
 
 	bfs_launch(mod, num_of_blocks, num_of_threads_per_block, no_of_nodes,
 			   d_over, d_graph_nodes, d_graph_edges, d_graph_mask, 
 			   d_updating_graph_mask, d_graph_visited, d_cost);
 
 	/* copy result from device to host */
+	gettimeofday(&tv_d2h_start, NULL);
 	res = cuMemcpyDtoH(h_cost, d_cost, sizeof(int) * no_of_nodes);
 	if (res != CUDA_SUCCESS) {
 		printf("cuMemcpyDtoH failed: res = %u\n", res);
 		return -1;
 	}
-
-	/*
-	 * measurement end! will print out the time.
-	 */
-	time_measure_end(&tv);
+	gettimeofday(&tv_d2h_end, NULL);
+    tvsub(&tv_d2h_end, &tv_d2h_start, &tv);
+	d2h = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	/* Store the result into a file */
 	{
@@ -317,6 +352,7 @@ int BFSGraph(int argc, char** argv)
 		printf("/* Result stored in result.txt */\n");
 	}
 
+	gettimeofday(&tv_close_start, NULL);
 	/* cleanup memory */
 	cuMemFree(d_graph_nodes);
 	cuMemFree(d_graph_edges);
@@ -337,7 +373,21 @@ int BFSGraph(int argc, char** argv)
 	free(h_updating_graph_mask);
 	free(h_graph_visited);
 	free(h_cost);
+	gettimeofday(&tv_total_end, NULL);
 
+	tvsub(&tv_total_end, &tv_close_start, &tv);
+	close_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	tvsub(&tv_total_end, &tv_total_start, &tv);
+	total = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	printf("Init: %f\n", init_gpu);
+	printf("MemAlloc: %f\n", mem_alloc);
+	printf("HtoD: %f\n", h2d);
+	printf("Exec: %f\n", exec);
+	printf("DtoH: %f\n", d2h);
+	printf("Close: %f\n", close_gpu);
+	printf("Total: %f\n", total);
 	return 0;
 }
 
