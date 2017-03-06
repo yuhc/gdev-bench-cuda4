@@ -41,11 +41,20 @@ int blosum62[24][24] = {
 {-4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4, -4,  1}
 };
 
-double gettime() {
-  struct timeval t;
-  gettimeofday(&t,NULL);
-  return t.tv_sec+t.tv_usec*1e-6;
-}
+struct timeval tv;
+struct timeval tv_total_start, tv_total_end;
+float total;
+struct timeval tv_h2d_start, tv_h2d_end;
+float h2d;
+struct timeval tv_d2h_start, tv_d2h_end;
+float d2h;
+struct timeval tv_exec_start, tv_exec_end;
+struct timeval tv_mem_alloc_start;
+struct timeval tv_close_start;
+float mem_alloc;
+float exec;
+float init_gpu;
+float close_gpu;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Program main
@@ -182,6 +191,7 @@ int runTest( int argc, char** argv)
     CUresult res;
     CUdeviceptr referrence_cuda, matrix_cuda, matrix_cuda_out;
 
+	gettimeofday(&tv_total_start, NULL);
     res = cuda_driver_api_init(&ctx, &mod, "./needle.cubin");
     if (res != CUDA_SUCCESS) {
         printf("cuda_driver_api_init failed: res = %u\n", res);
@@ -189,6 +199,10 @@ int runTest( int argc, char** argv)
     }
 
     size = max_cols * max_rows;
+
+    gettimeofday(&tv_mem_alloc_start, NULL);
+	tvsub(&tv_mem_alloc_start, &tv_total_start, &tv);
+	init_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
     /* Allocate device memory */
     res = cuMemAlloc(&referrence_cuda, sizeof(int) * size);
@@ -209,8 +223,9 @@ int runTest( int argc, char** argv)
         return -1;
     }
 
-    struct timeval tot_time_start;
-    gettimeofday(&tot_time_start, NULL);
+    gettimeofday(&tv_h2d_start, NULL);
+    tvsub(&tv_h2d_start, &tv_mem_alloc_start, &tv);
+	mem_alloc = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
     /* Copy data from main memory to device memory */
     res = cuMemcpyHtoD(referrence_cuda, referrence, sizeof(int) * size);
@@ -227,9 +242,10 @@ int runTest( int argc, char** argv)
 
 	int block_width = ( max_cols - 1 )/BLOCK_SIZE;
 
-    // begin timing kernels
-    struct timeval time_start;
-    gettimeofday(&time_start, NULL);
+    gettimeofday(&tv_h2d_end, NULL);
+    tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
+    h2d = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
 	printf("Processing top-left matrix\n");
 
 	//process top-left matrix
@@ -244,11 +260,9 @@ int runTest( int argc, char** argv)
                 matrix_cuda_out, max_cols, penalty, i, block_width);
 	}
 
-    // end timing kernels
-    struct timeval time_end;
-    unsigned int totalKernelTime = 0;
-    gettimeofday(&time_end, NULL);
-    totalKernelTime = (time_end.tv_sec * 1000000 + time_end.tv_usec) - (time_start.tv_sec * 1000000 + time_start.tv_usec);
+    gettimeofday(&tv_exec_end, NULL);
+    tvsub(&tv_exec_end, &tv_h2d_end, &tv);
+    exec = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
     /* Copy data from device memory to main memory */
     res = cuMemcpyDtoH(output_itemsets, matrix_cuda, sizeof(int) * size);
@@ -257,12 +271,33 @@ int runTest( int argc, char** argv)
         return -1;
     }
 
-    struct timeval tot_time_end;
-    unsigned int totalTime = 0;
-    gettimeofday(&tot_time_end, NULL);
-    totalTime = (tot_time_end.tv_sec * 1000000 + tot_time_end.tv_usec) - (tot_time_start.tv_sec * 1000000 + tot_time_start.tv_usec);
-    printf("Time for CUDA kernels:\t%f sec\n",totalKernelTime * 1e-6);
-    printf("Time (Memory Copy and Launch) = \t%f sec\n",totalTime * 1e-6);
+	gettimeofday(&tv_d2h_end, NULL);
+    tvsub(&tv_d2h_end, &tv_exec_end, &tv);
+	d2h = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	cuMemFree(referrence_cuda);
+	cuMemFree(matrix_cuda);
+	cuMemFree(matrix_cuda_out);
+
+	res = cuda_driver_api_exit(ctx, mod);
+	if (res != CUDA_SUCCESS) {
+		printf("cuda_driver_api_exit faild: res = %u\n", res);
+		return -1;
+	}
+	gettimeofday(&tv_total_end, NULL);
+	tvsub(&tv_total_end, &tv_d2h_end, &tv);
+	close_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	tvsub(&tv_total_end, &tv_total_start, &tv);
+	total = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	printf("Init: %f\n", init_gpu);
+	printf("MemAlloc: %f\n", mem_alloc);
+	printf("HtoD: %f\n", h2d);
+	printf("Exec: %f\n", exec);
+	printf("DtoH: %f\n", d2h);
+	printf("Close: %f\n", close_gpu);
+	printf("Total: %f\n", total);
 
 //#define TRACEBACK
 #ifdef TRACEBACK
@@ -322,10 +357,6 @@ int runTest( int argc, char** argv)
 
 	fclose(fpo);
 #endif
-
-	cuMemFree(referrence_cuda);
-	cuMemFree(matrix_cuda);
-	cuMemFree(matrix_cuda_out);
 
 	free(referrence);
 	free(input_itemsets);
