@@ -244,7 +244,7 @@ int main (int argc, char *argv[])
 
 	gettimeofday(&tv_d2h_end, NULL);
     tvsub(&tv_d2h_end, &tv_exec_end, &tv);
-	d2h += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+	d2h = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	res = cuMemFree(d_m);
 	if (res != CUDA_SUCCESS) {
@@ -258,7 +258,7 @@ int main (int argc, char *argv[])
 		return -1;
 	}
 	gettimeofday(&tv_total_end, NULL);
-	tvsub(&tv_total_end, &tv_close_start, &tv);
+	tvsub(&tv_total_end, &tv_d2h_end, &tv);
 	close_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	tvsub(&tv_total_end, &tv_total_start, &tv);

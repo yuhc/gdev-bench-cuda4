@@ -14,6 +14,21 @@ extern "C" {
 #include "util.h" /* cuda_driver_api_{init,exit}() */
 #include "nn.h"
 
+struct timeval tv;
+struct timeval tv_total_start, tv_total_end;
+float total;
+struct timeval tv_h2d_start, tv_h2d_end;
+float h2d;
+struct timeval tv_d2h_start, tv_d2h_end;
+float d2h;
+struct timeval tv_exec_start, tv_exec_end;
+struct timeval tv_mem_alloc_start;
+struct timeval tv_close_start;
+float mem_alloc;
+float exec;
+float init_gpu;
+float close_gpu;
+
 int loadData
 (char *filename,std::vector<Record> &records,std::vector<LatLong> &locations);
 void findLowest
@@ -65,7 +80,6 @@ int main(int argc, char* argv[])
 	std::vector<LatLong> locations;
 	char filename[100];
 	int resultsCount = 10;
-	struct timeval tv;
 	/* pointers to host memory */
 	float *distances;
 	/* pointers to device memory */
@@ -82,27 +96,31 @@ int main(int argc, char* argv[])
 		printUsage();
 		return 0;
 	}
-	
+
 	numRecords = loadData(filename,records,locations);
-	
-	if (resultsCount > numRecords) 
+
+	if (resultsCount > numRecords)
 		resultsCount = numRecords;
-	
+
 	/*
 	  for(i=0;i<numRecords;i++)
 	  printf("%s, %f, %f\n",(records[i].recString),locations[i].lat,
 	  locations[i].lng);
 	*/
-	
+
 	/*
 	 * call our common CUDA initialization utility function.
 	 */
+	gettimeofday(&tv_total_start, NULL);
 	res = cuda_driver_api_init(&ctx, &mod, "./nn.cubin");
 	if (res != CUDA_SUCCESS) {
 		printf("cuda_driver_api_init failed: res = %u\n", res);
 		return -1;
 	}
-	
+
+    gettimeofday(&tv_mem_alloc_start, NULL);
+	tvsub(&tv_mem_alloc_start, &tv_total_start, &tv);
+	init_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 	/*
 	 * allocate memory on host and device
 	 */
@@ -122,11 +140,10 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
-	/*
-	 * measurement start!
-	 */
-	time_measure_start(&tv);
-	
+    gettimeofday(&tv_h2d_start, NULL);
+    tvsub(&tv_h2d_start, &tv_mem_alloc_start, &tv);
+	mem_alloc = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
 	/*
 	 * transfer data from host to device
 	 */
@@ -136,11 +153,19 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
+    gettimeofday(&tv_h2d_end, NULL);
+    tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
+    h2d = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
 	/*
 	 * execute kernel
 	 */
 	euclid_launch(mod, d_locations,d_distances,numRecords,lat,lng);
 	cuCtxSynchronize();
+
+    gettimeofday(&tv_exec_end, NULL);
+    tvsub(&tv_exec_end, &tv_h2d_end, &tv);
+    exec = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	/* copy data from device memory to host memory */
 	res = cuMemcpyDtoH(distances, d_distances, sizeof(float) * numRecords);
@@ -149,11 +174,34 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
-	/*
-	 * measurement end! will print out the time.
-	 */
-	time_measure_end(&tv);
-	  
+	gettimeofday(&tv_d2h_end, NULL);
+    tvsub(&tv_d2h_end, &tv_exec_end, &tv);
+	d2h = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	/* free memory */
+	cuMemFree(d_locations);
+	cuMemFree(d_distances);
+
+	res = cuda_driver_api_exit(ctx, mod);
+	if (res != CUDA_SUCCESS) {
+		printf("cuda_driver_api_exit faild: res = %u\n", res);
+		return -1;
+	}
+	gettimeofday(&tv_total_end, NULL);
+	tvsub(&tv_total_end, &tv_d2h_end, &tv);
+	close_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	tvsub(&tv_total_end, &tv_total_start, &tv);
+	total = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	printf("Init: %f\n", init_gpu);
+	printf("MemAlloc: %f\n", mem_alloc);
+	printf("HtoD: %f\n", h2d);
+	printf("Exec: %f\n", exec);
+	printf("DtoH: %f\n", d2h);
+	printf("Close: %f\n", close_gpu);
+	printf("Total: %f\n", total);
+
 	/* find the resultsCount least distances */
 	findLowest(records,distances,numRecords,resultsCount);
 
@@ -164,15 +212,6 @@ int main(int argc, char* argv[])
 	}
 
 	free(distances);
-	/* free memory */
-	cuMemFree(d_locations);
-	cuMemFree(d_distances);
-
-	res = cuda_driver_api_exit(ctx, mod);
-	if (res != CUDA_SUCCESS) {
-		printf("cuda_driver_api_exit faild: res = %u\n", res);
-		return -1;
-	}
 
 	return 0;
 }
@@ -241,7 +280,7 @@ void findLowest
 	int minLoc;
 	Record *tempRec;
 	float tempDist;
-	
+
 	for(i=0;i<topN;i++) {
 		minLoc = i;
 		for(j=i;j<numRecords;j++) {
@@ -252,11 +291,11 @@ void findLowest
 		tempRec = &records[i];
 		records[i] = records[minLoc];
 		records[minLoc] = *tempRec;
-		
+
 		tempDist = distances[i];
 		distances[i] = distances[minLoc];
 		distances[minLoc] = tempDist;
-		
+
 		// add distance to the min we just found
 		records[i].distance = distances[i];
 	}
