@@ -5,7 +5,8 @@ OCLDIR=$DIR/user
 
 # 11 in total
 # heartwall does not work
-bm="idle loop madd mmul fmadd fmmul memcpy memcpy_pinned"
+bm="idle loop madd mmul fmadd fmmul \
+    memcpy memcpy_pinned memcpy_async shm"
 
 OUTDIR=$DIR/results
 mkdir $OUTDIR &>/dev/null
