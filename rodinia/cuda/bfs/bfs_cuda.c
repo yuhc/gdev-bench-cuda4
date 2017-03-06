@@ -341,15 +341,6 @@ int BFSGraph(int argc, char** argv)
     tvsub(&tv_d2h_end, &tv_d2h_start, &tv);
 	d2h += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
-	/* Store the result into a file */
-	{
-		FILE *fpo = fopen("result.txt", "w");
-		for(i = 0; i < no_of_nodes; i++)
-			fprintf(fpo, "%d) cost:%d\n", i, h_cost[i]);
-		fclose(fpo);
-		printf("/* Result stored in result.txt */\n");
-	}
-
 	gettimeofday(&tv_close_start, NULL);
 	/* cleanup memory */
 	cuMemFree(d_graph_nodes);
@@ -365,6 +356,15 @@ int BFSGraph(int argc, char** argv)
 		return -1;
 	}
 	gettimeofday(&tv_total_end, NULL);
+
+	/* Store the result into a file */
+	{
+		FILE *fpo = fopen("result.txt", "w");
+		for(i = 0; i < no_of_nodes; i++)
+			fprintf(fpo, "%d) cost:%d\n", i, h_cost[i]);
+		fclose(fpo);
+		printf("/* Result stored in result.txt */\n");
+	}
 
 	free(h_graph_nodes);
 	free(h_graph_edges);

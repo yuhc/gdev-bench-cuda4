@@ -47,7 +47,7 @@ struct timeval tv_total_start, tv_total_end;
 float total;
 struct timeval tv_h2d_start, tv_h2d_end;
 float h2d;
-struct timeval tv_d2h_start, tv_d2h_end;
+struct timeval tv_d2h_end;
 float d2h;
 struct timeval tv_exec_start, tv_exec_end;
 struct timeval tv_mem_alloc_start;
@@ -399,7 +399,7 @@ int ForwardSub(CUmodule mod)
     }
 
 	gettimeofday(&tv_d2h_end, NULL);
-    tvsub(&tv_d2h_end, &tv_d2h_start, &tv);
+    tvsub(&tv_d2h_end, &tv_exec_end, &tv);
 	d2h = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	gettimeofday(&tv_close_start, NULL);
