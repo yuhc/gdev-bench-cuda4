@@ -103,7 +103,7 @@ CUresult pathfinder_launch(CUmodule mod, int gdx, int bdx, int iteration,
     CUfunction f;
     CUresult res;
 
-    res = cuModuleGetFunction(&f, mod, "_Z14dynproc_kerneliPis_S_iiii");
+    res = cuModuleGetFunction(&f, mod, "_Z14dynproc_kerneliPiS_S_iiii");
     if (res != CUDA_SUCCESS) {
         printf("cuModuleGetFunction failed: res = %u\n", res);
         return res;

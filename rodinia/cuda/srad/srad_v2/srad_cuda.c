@@ -7,6 +7,21 @@
 
 #include <cuda.h>
 
+struct timeval tv;
+struct timeval tv_total_start, tv_total_end;
+float total;
+struct timeval tv_h2d_start, tv_h2d_end;
+float h2d;
+struct timeval tv_d2h_start, tv_d2h_end;
+float d2h;
+struct timeval tv_exec_start, tv_exec_end;
+struct timeval tv_mem_alloc_start, tv_mem_alloc_end;
+struct timeval tv_close_start;
+float mem_alloc;
+float exec;
+float init_gpu;
+float close_gpu;
+
 void random_matrix(float *I, int rows, int cols);
 void runTest( int argc, char** argv);
 
@@ -40,7 +55,7 @@ CUresult srad_launch
 		printf("cuModuleGetFunction(srad) failed: res = %u\n", res);
 		return res;
 	}
-	
+
 	res = cuLaunchKernel(f, gdx, gdy, 1, bdx, bdy, 1, 0x1800, 0, 
 						 (void**) param, NULL);
 	if (res != CUDA_SUCCESS) {
@@ -137,7 +152,7 @@ runTest( int argc, char** argv)
 
 	size_I = cols * rows;
 	size_R = (r2 - r1 + 1) * (c2 - c1 + 1);   
-	
+
 	I = (float *) malloc(size_I * sizeof(float));
 	J = (float *) malloc(size_I * sizeof(float));
 	c = (float *) malloc(sizeof(float)* size_I);
@@ -152,7 +167,7 @@ runTest( int argc, char** argv)
 	dS = (float *) malloc(sizeof(float)* size_I);
 	dW = (float *) malloc(sizeof(float)* size_I);
 	dE = (float *) malloc(sizeof(float)* size_I);	
-	
+
 
 	for (i = 0; i < rows; i++) {
 		iN[i] = i - 1;
@@ -170,11 +185,16 @@ runTest( int argc, char** argv)
 
 #ifdef GPU
 	/* call our common CUDA initialization utility function. */
+	gettimeofday(&tv_total_start, NULL);
 	res = cuda_driver_api_init(&ctx, &mod, "./srad.cubin");
 	if (res != CUDA_SUCCESS) {
 		printf("cuda_driver_api_init failed: res = %u\n", res);
 		return;
 	}
+
+    gettimeofday(&tv_mem_alloc_start, NULL);
+	tvsub(&tv_mem_alloc_start, &tv_total_start, &tv);
+	init_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	/* Allocate device memory */
 	res = cuMemAlloc(&J_cuda, sizeof(float) * size_I);
@@ -209,7 +229,12 @@ runTest( int argc, char** argv)
 	}
 #endif 
 
+    gettimeofday(&tv_mem_alloc_end, NULL);
+    tvsub(&tv_mem_alloc_end, &tv_mem_alloc_start, &tv);
+	mem_alloc = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
 	printf("Randomizing the input matrix\n");
+
 	/* Generate a random matrix */
 	random_matrix(I, rows, cols);
 
@@ -217,11 +242,9 @@ runTest( int argc, char** argv)
 	 	J[k] = (float) exp(I[k]);
 	}
 
-	/******************************************************
-	 * measurement start!
-	 ******************************************************/
-	time_measure_start(&tv);
-
+    exec = 0;
+    d2h = 0;
+    h2d = 0;
 	for (iter = 0; iter < niter; iter++) {
 		sum = 0;
 		sum2 = 0;
@@ -235,7 +258,7 @@ runTest( int argc, char** argv)
 		meanROI = sum / size_R;
 		varROI = (sum2 / size_R) - (meanROI * meanROI);
 		q0sqr = varROI / (meanROI * meanROI);
-		
+
 #ifdef CPU
 		for (i = 0 ; i < rows ; i++) {
 			for (j = 0; j < cols; j++) { 
@@ -246,7 +269,7 @@ runTest( int argc, char** argv)
 				dS[k] = J[iS[i] * cols + j] - Jc;
 				dW[k] = J[i * cols + jW[j]] - Jc;
 				dE[k] = J[i * cols + jE[j]] - Jc;
-				
+
 				G2 = (dN[k]*dN[k] + dS[k]*dS[k] + dW[k]*dW[k] + dE[k]*dE[k]) 
 					/ (Jc*Jc);
 
@@ -259,7 +282,7 @@ runTest( int argc, char** argv)
 				/* diffusion coefficent (equ 33) */
 				den = (qsqr-q0sqr) / (q0sqr * (1+q0sqr));
 				c[k] = 1.0 / (1.0+den) ;
-				
+
 				/* saturate diffusion coefficent */
 				if (c[k] < 0) 
 					c[k] = 0;
@@ -271,7 +294,7 @@ runTest( int argc, char** argv)
 			for (j = 0; j < cols; j++) {		
 				// current index
 				k = i * cols + j;
-				
+
 				// diffusion coefficent
 					cN = c[k];
 					cS = c[iS[i] * cols + j];
@@ -280,46 +303,55 @@ runTest( int argc, char** argv)
 
 				// divergence (equ 58)
 				D = cN * dN[k] + cS * dS[k] + cW * dW[k] + cE * dE[k];
-				
+
 				// image update (equ 61)
 				J[k] = J[k] + 0.25*lambda*D;
 			}
 		}
 #endif
-		
+
 #ifdef GPU
 		/* Currently the input size must be divided by 16 - the block size */
 		bdx = BLOCK_SIZE;
 		bdy = BLOCK_SIZE;
 		gdx = cols / bdx;
 		gdy = rows / bdy;
-		
+
+        gettimeofday(&tv_h2d_start, NULL);
+
 		/* Copy data from main memory to device memory */
 		res = cuMemcpyHtoD(J_cuda, J, sizeof(float) * size_I);
 		if (res != CUDA_SUCCESS) {
 			printf("cuMemcpyHtoD failed: res = %u\n", res);
 			return ;
 		}
-		
+
+        gettimeofday(&tv_h2d_end, NULL);
+        tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
+        h2d += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
 		/* Run kernels */
 		res = srad_launch(mod, gdx, gdy, bdx, bdy, E_C, W_C, N_C, S_C, 
 						  J_cuda, C_cuda, cols, rows, q0sqr); 
 		res = srad2_launch(mod, gdx, gdy, bdx, bdy, E_C, W_C, N_C, S_C, 
 						   J_cuda, C_cuda, cols, rows, lambda, q0sqr); 
-		
+
+        gettimeofday(&tv_exec_end, NULL);
+        tvsub(&tv_exec_end, &tv_h2d_end, &tv);
+        exec += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
 		/* Copy data from device memory to main memory */
 		res = cuMemcpyDtoH(J, J_cuda, sizeof(float) * size_I);
 		if (res != CUDA_SUCCESS) {
 			printf("cuMemcpyHtoD failed: res = %u\n", res);
 			return ;
 		}
-#endif   
-	}
 
-	/*******************************************************
-	 * measurement end! will print out the time.
-	 ******************************************************/
-	time_measure_end(&tv);
+        gettimeofday(&tv_d2h_end, NULL);
+        tvsub(&tv_d2h_end, &tv_exec_end, &tv);
+        d2h += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+#endif
+	}
 
 #ifdef OUTPUT
 	/* Printing output */
@@ -327,13 +359,13 @@ runTest( int argc, char** argv)
 	for(i = 0 ; i < rows ; i++) {
 		for (j = 0 ; j < cols ; j++) {
 			printf("%.5f ", J[i * cols + j]); 
-		}	
-		printf("\n"); 
+		}
+		printf("\n");
 	}
-#endif 
+#endif
 
 	printf("Computation Done\n");
-	
+
 	free(I);
 	free(J);
 #ifdef CPU
@@ -341,6 +373,8 @@ runTest( int argc, char** argv)
 	free(dN); free(dS); free(dW); free(dE);
 #endif
 #ifdef GPU
+	gettimeofday(&tv_close_start, NULL);
+
 	cuMemFree(C_cuda);
 	cuMemFree(J_cuda);
 	cuMemFree(E_C);
@@ -351,11 +385,26 @@ runTest( int argc, char** argv)
 	if (res != CUDA_SUCCESS) {
 		printf("cuda_driver_api_exit faild: res = %u\n", res);
 		return;
+
+	gettimeofday(&tv_total_end, NULL);
+	tvsub(&tv_total_end, &tv_close_start, &tv);
+	close_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	tvsub(&tv_total_end, &tv_total_start, &tv);
+	total = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	printf("Init: %f\n", init_gpu);
+	printf("MemAlloc: %f\n", mem_alloc);
+	printf("HtoD: %f\n", h2d);
+	printf("Exec: %f\n", exec);
+	printf("DtoH: %f\n", d2h);
+	printf("Close: %f\n", close_gpu);
+	printf("Total: %f\n", total);
 	}
-#endif 
+#endif
+
 	free(c);
 }
-
 
 void random_matrix(float *I, int rows, int cols)
 {

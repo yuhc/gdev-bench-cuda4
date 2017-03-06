@@ -191,7 +191,20 @@ int main(int argc, char *argv [])
 	long long time10;
 	long long time11;
 	long long time12;
-	struct timeval tv;
+	long long time_exit;
+    struct timeval tv;
+    struct timeval tv_total_start, tv_total_end;
+    float total_t;
+    struct timeval tv_h2d_start, tv_h2d_end;
+    float h2d;
+    struct timeval tv_d2h_end;
+    float d2h;
+    struct timeval tv_exec_start, tv_exec_end;
+    struct timeval tv_mem_alloc_start;
+    float mem_alloc;
+    float exec;
+    float init_gpu;
+    float close_gpu;
 
 	time0 = get_time();
 
@@ -351,11 +364,16 @@ int main(int argc, char *argv [])
 	 ******************************************************/
 
 	/* call our common CUDA initialization utility function. */
+	gettimeofday(&tv_total_start, NULL);
 	res = cuda_driver_api_init(&ctx, &mod, "./srad.cubin");
 	if (res != CUDA_SUCCESS) {
 		printf("cuda_driver_api_init failed: res = %u\n", res);
 		return -1;
 	}
+
+    gettimeofday(&tv_mem_alloc_start, NULL);
+	tvsub(&tv_mem_alloc_start, &tv_total_start, &tv);
+	init_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	/* allocate memory for entire IMAGE on DEVICE */
 	mem_size = sizeof(fp) * Ne;	/* size of input IMAGE */
@@ -428,15 +446,14 @@ int main(int argc, char *argv [])
 		return -1;
 	}
 
-	/******************************************************
-	 * measurement start!
-	 ******************************************************/
-	time_measure_start(&tv);
+    gettimeofday(&tv_h2d_start, NULL);
+    tvsub(&tv_h2d_start, &tv_mem_alloc_start, &tv);
+	mem_alloc = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	/*******************************************************
 	 * COPY DATA TO DEVICE 
 	 ******************************************************/
-	
+
 	res = cuMemcpyHtoD(d_iN, iN, mem_size_i);
 	if (res != CUDA_SUCCESS) {
 		printf("cuMemcpyHtoD failed: res = %u\n", res);
@@ -489,6 +506,10 @@ int main(int argc, char *argv [])
 
 	time6 = get_time();
 
+    gettimeofday(&tv_h2d_end, NULL);
+    tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
+    h2d = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
 	/*******************************************************
 	 * SCALE IMAGE DOWN FROM 0-255 TO 0-1 AND EXTRACT
 	 ******************************************************/
@@ -498,6 +519,11 @@ int main(int argc, char *argv [])
 		printf("extract_launch failed: res = %u\n", res);
 		return -1;
 	}
+
+    gettimeofday(&tv_exec_end, NULL);
+    tvsub(&tv_exec_end, &tv_h2d_end, &tv);
+    exec = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+    d2h = 0;
 
 	/* checkCUDAError("extract"); */
 
@@ -512,6 +538,7 @@ int main(int argc, char *argv [])
 		/* printf("%d ", iter); */
 		/* fflush(NULL); */
 
+        gettimeofday(&tv_exec_start, NULL);
 		/* execute square kernel */
 		res = prepare_launch(mod, gdx, gdy, bdx, bdy, Ne, d_I, d_sums, d_sums2);
 		if (res != CUDA_SUCCESS) {
@@ -536,7 +563,7 @@ int main(int argc, char *argv [])
 				printf("reduce_launch failed: res = %u\n", res);
 				return -1;
 			}
-			
+
 			/* checkCUDAError("reduce"); */
 
 			/* update execution parameters */
@@ -558,6 +585,10 @@ int main(int argc, char *argv [])
 
 		}
 
+        gettimeofday(&tv_exec_end, NULL);
+        tvsub(&tv_exec_end, &tv_exec_start, &tv);
+        exec += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
 		/* checkCUDAError("before copy sum"); */
 
 		/* copy total sums to HOST */
@@ -572,6 +603,10 @@ int main(int argc, char *argv [])
 			printf("cuMemcpyDtoH failed: res = %u\n", res);
 			return -1;
 		}
+
+        gettimeofday(&tv_d2h_end, NULL);
+        tvsub(&tv_d2h_end, &tv_exec_end, &tv);
+        d2h += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 		/* checkCUDAError("copy sum"); */
 		/* calculate statistics */
@@ -625,6 +660,10 @@ int main(int argc, char *argv [])
 			return -1;
 		}
 		/* checkCUDAError("srad2"); */
+
+        gettimeofday(&tv_exec_end, NULL);
+        tvsub(&tv_exec_end, &tv_d2h_end, &tv);
+        exec += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 	}
 
 	/* printf("\n"); */
@@ -635,12 +674,18 @@ int main(int argc, char *argv [])
 	 * SCALE IMAGE UP FROM 0-1 TO 0-255 AND COMPRESS
 	 ******************************************************/
 
+    gettimeofday(&tv_exec_start, NULL);
+
 	res = compress_launch(mod, gdx, gdy, bdx, bdy, Ne, d_I);
 	if (res != CUDA_SUCCESS) {
 		printf("compress_launch failed: res = %u\n", res);
 		return -1;
 	}
 	/* checkCUDAError("compress"); */
+
+    gettimeofday(&tv_exec_end, NULL);
+    tvsub(&tv_exec_end, &tv_exec_start, &tv);
+    exec += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	time9 = get_time();
 
@@ -653,34 +698,18 @@ int main(int argc, char *argv [])
 		printf("cuMemcpyDtoH failed: res = %u\n", res);
 		return -1;
 	}
-	
 	/* checkCUDAError("copy back"); */
-
-	time10 = get_time();
-
-	/*******************************************************
-	 * measurement end! will print out the time.
-	 ******************************************************/
-	time_measure_end(&tv);
-
-	/*******************************************************
-	 * WRITE IMAGE AFTER PROCESSING
-	 ******************************************************/
-	write_graphics("image_out.pgm", image, Nr, Nc, 1, 255);
-
-	time11 = get_time();
-
-	/*******************************************************
-	 * DEALLOCATE
-	 ******************************************************/
-	free(image_ori);
-	free(image);
-	free(iN); 
-	free(iS); 
-	free(jW); 
-	free(jE);
-
 	cuCtxSynchronize();
+
+	gettimeofday(&tv_d2h_end, NULL);
+    tvsub(&tv_d2h_end, &tv_exec_end, &tv);
+	d2h += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	/*******************************************************
+	 * CLEAN UP GPU
+	 ******************************************************/
+
+	time_exit = get_time();
 
 	cuMemFree(d_I);
 	cuMemFree(d_c);
@@ -695,14 +724,49 @@ int main(int argc, char *argv [])
 	cuMemFree(d_sums);
 	cuMemFree(d_sums2);
 
-	time12 = get_time();
-
 	res = cuda_driver_api_exit(ctx, mod);
 	if (res != CUDA_SUCCESS) {
 		printf("cuda_driver_api_exit faild: res = %u\n", res);
 		return -1;
 	}
-	
+
+	gettimeofday(&tv_total_end, NULL);
+	tvsub(&tv_total_end, &tv_d2h_end, &tv);
+	close_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	tvsub(&tv_total_end, &tv_total_start, &tv);
+	total_t = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	printf("Init: %f\n", init_gpu);
+	printf("MemAlloc: %f\n", mem_alloc);
+	printf("HtoD: %f\n", h2d);
+	printf("Exec: %f\n", exec);
+	printf("DtoH: %f\n", d2h);
+	printf("Close: %f\n", close_gpu);
+	printf("Total: %f\n", total_t);
+
+	/*******************************************************
+	 * WRITE IMAGE AFTER PROCESSING
+	 ******************************************************/
+
+	time10 = get_time();
+
+	write_graphics("image_out.pgm", image, Nr, Nc, 1, 255);
+
+	time11 = get_time();
+
+	/*******************************************************
+	 * DEALLOCATE
+	 ******************************************************/
+	free(image_ori);
+	free(image);
+	free(iN);
+	free(iS);
+	free(jW);
+	free(jE);
+
+	time12 = get_time();
+
 	/*******************************************************
 	 * DISPLAY TIMING
 	 ******************************************************/
@@ -735,14 +799,14 @@ int main(int argc, char *argv [])
 		   (float) (time9-time8) / 1000000,
 		   (float) (time9-time8) / (float) (time12-time0) * 100);
 	printf("%15.12f s, %15.12f %% : COPY DATA TO GPU->CPU\n",
-		   (float) (time10-time9) / 1000000,
-		   (float) (time10-time9) / (float) (time12-time0) * 100);
+		   (float) (time_exit-time9) / 1000000,
+		   (float) (time_exit-time9) / (float) (time12-time0) * 100);
 	printf("%15.12f s, %15.12f %% : SAVE IMAGE INTO FILE\n",
 		   (float) (time11-time10) / 1000000,
 		   (float) (time11-time10) / (float) (time12-time0) * 100);
 	printf("%15.12f s, %15.12f %% : FREE MEMORY\n",
-		   (float) (time12-time11) / 1000000,
-		   (float) (time12-time11) / (float) (time12-time0) * 100);
+		   (float) (time12-time11+time10-time_exit) / 1000000,
+		   (float) (time12-time11+time10-time_exit) / (float) (time12-time0) * 100);
 	printf("Total time:\n");
 	printf("%.12f s\n",	(float) (time12-time0) / 1000000);
 
