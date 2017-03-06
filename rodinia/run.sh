@@ -3,9 +3,9 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 OCLDIR=$DIR/cuda
 
-# 11 in total
-#  and  does not work
-bm="backprop heartwall bfs gaussian hotspot \
+# 10 in total
+# heartwall does not work because the cubin size is too large
+bm="backprop bfs gaussian hotspot \
     lud nn pathfinder needle srad/srad_v1 srad/srad_v2"
 
 OUTDIR=$DIR/results
