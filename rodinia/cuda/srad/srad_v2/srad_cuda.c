@@ -36,7 +36,7 @@ void usage(int argc, char **argv)
 	fprintf(stderr, "\t<x2>       - x2 value of the speckle\n");
 	fprintf(stderr, "\t<lamda>   - lambda (0,1)\n");
 	fprintf(stderr, "\t<no. of iter>   - number of iterations\n");
-	
+
 	exit(1);
 }
 
@@ -385,6 +385,7 @@ runTest( int argc, char** argv)
 	if (res != CUDA_SUCCESS) {
 		printf("cuda_driver_api_exit faild: res = %u\n", res);
 		return;
+	}
 
 	gettimeofday(&tv_total_end, NULL);
 	tvsub(&tv_total_end, &tv_close_start, &tv);
@@ -400,7 +401,6 @@ runTest( int argc, char** argv)
 	printf("DtoH: %f\n", d2h);
 	printf("Close: %f\n", close_gpu);
 	printf("Total: %f\n", total);
-	}
 #endif
 
 	free(c);
@@ -411,7 +411,7 @@ void random_matrix(float *I, int rows, int cols)
 	int i, j;
 
 	srand(7);
-	
+
 	for(i = 0 ; i < rows ; i++) {
 		for (j = 0 ; j < cols ; j++) {
 			I[i * cols + j] = rand() / (float) RAND_MAX;
