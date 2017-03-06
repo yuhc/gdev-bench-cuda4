@@ -120,12 +120,11 @@ void bpnn_train_cuda(BPNN *net, float *eo, float *eh)
 	int j, k;
 	int in, hid, out;
 	float out_err, hid_err;
-	struct timeval tv;
-	
+
 	in = net->input_n;
 	hid = net->hidden_n;
 	out = net->output_n;   
-	
+
 #ifdef GPU  
 	int m = 0;
 	float *partial_sum;
@@ -343,11 +342,6 @@ void bpnn_train_cuda(BPNN *net, float *eo, float *eh)
 	cuMemFree(hidden_partial_sum);
 	cuMemFree(input_prev_weights_cuda);
 	cuMemFree(hidden_delta_cuda);
-
-	/*
-	 * measurement end! will print out the time.
-	 */
-	time_measure_end(&tv);
 
 	res = cuda_driver_api_exit(ctx, mod);
 	if (res != CUDA_SUCCESS) {
