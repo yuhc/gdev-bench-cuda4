@@ -45,7 +45,6 @@ float mem_alloc;
 float exec;
 float init_gpu;
 float close_gpu;
-float data_read;
 
 int bfs_launch
 (CUmodule mod, int nr_blocks, int nr_threads_per_block, int nr_nodes,
@@ -92,7 +91,6 @@ int bfs_launch
 	    h2d += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 		/* f1 */
-	    gettimeofday(&tv_exec_start, NULL);
 		void *param1[] = {&d_graph_nodes, &d_graph_edges, &d_graph_mask, 
 						  &d_updating_graph_mask, &d_graph_visited, &d_cost,
 						  &nr_nodes};
@@ -116,7 +114,7 @@ int bfs_launch
         }
 		/* check if kernel execution generated and error */
 	    gettimeofday(&tv_exec_end, NULL);
-    	tvsub(&tv_exec_end, &tv_exec_start, &tv);
+    	tvsub(&tv_exec_end, &tv_h2d_end, &tv);
     	exec += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 		res = cuMemcpyDtoH(&stop, d_over, sizeof(int));
@@ -341,7 +339,7 @@ int BFSGraph(int argc, char** argv)
 	}
 	gettimeofday(&tv_d2h_end, NULL);
     tvsub(&tv_d2h_end, &tv_d2h_start, &tv);
-	d2h = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+	d2h += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	/* Store the result into a file */
 	{
@@ -366,6 +364,7 @@ int BFSGraph(int argc, char** argv)
 		printf("cuda_driver_api_exit faild: res = %u\n", res);
 		return -1;
 	}
+	gettimeofday(&tv_total_end, NULL);
 
 	free(h_graph_nodes);
 	free(h_graph_edges);
@@ -373,7 +372,6 @@ int BFSGraph(int argc, char** argv)
 	free(h_updating_graph_mask);
 	free(h_graph_visited);
 	free(h_cost);
-	gettimeofday(&tv_total_end, NULL);
 
 	tvsub(&tv_total_end, &tv_close_start, &tv);
 	close_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;

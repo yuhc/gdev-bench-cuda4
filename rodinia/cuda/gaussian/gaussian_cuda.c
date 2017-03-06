@@ -42,8 +42,20 @@ void PrintMat(float *ary, int nrow, int ncolumn);
 void PrintAry(float *ary, int ary_size);
 void PrintDeviceProperties();
 
-unsigned int totalKernelTime = 0;
-unsigned int total_time = 0;
+struct timeval tv;
+struct timeval tv_total_start, tv_total_end;
+float total;
+struct timeval tv_h2d_start, tv_h2d_end;
+float h2d;
+struct timeval tv_d2h_start, tv_d2h_end;
+float d2h;
+struct timeval tv_exec_start, tv_exec_end;
+struct timeval tv_mem_alloc_start;
+struct timeval tv_close_start, tv_close_end;
+float mem_alloc;
+float exec;
+float init_gpu;
+float close_gpu;
 
 //=========================================================================
 // KERNEL CODE
@@ -105,11 +117,8 @@ int main(int argc, char *argv []){
 
     usage(argc, argv);
     InitProblemOnce(argv[1]);
-    if (argc > 2) {
+    if (argc > 2)
         if (!strcmp(argv[2],"-q")) verbose = 0;
-    }
-    InitPerRun();
-
     if (verbose) {
         printf("Matrix m is: \n");
         PrintMat(m, Size, Size);
@@ -122,41 +131,47 @@ int main(int argc, char *argv []){
     }
 
     /* call our common CUDA initialization utility function. */
+	gettimeofday(&tv_total_start, NULL);
     res = cuda_driver_api_init(&ctx, &mod, "./gaussian.cubin");
     if (res != CUDA_SUCCESS) {
         printf("cuda_driver_api_init failed: res = %u\n", res);
         return -1;
     }
 
-    // begin timing kernels
-    struct timeval tot_time_start;
-    gettimeofday(&tot_time_start, NULL);
-
     rt = ForwardSub(mod);
     if (rt < 0) return -1;
+
+    gettimeofday(&tv_close_start, NULL);
+    res = cuda_driver_api_exit(ctx, mod);
+    if (res != CUDA_SUCCESS) {
+        printf("cuda_driver_api_exit failed: res = %u\n", res);
+        return -1;
+    }
+	gettimeofday(&tv_total_end, NULL);
+	tvsub(&tv_total_end, &tv_close_start, &tv);
+	close_gpu += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	tvsub(&tv_total_end, &tv_total_start, &tv);
+	total = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
     BackSub();
     if (verbose) {
         printf("The final solution is: \n");
         PrintAry(finalVec,Size);
     }
 
-    // end timing kernels
-    struct timeval tot_time_end;
-    gettimeofday(&tot_time_end, NULL);
-    total_time = (tot_time_end.tv_sec * 1000000 + tot_time_end.tv_usec) - (tot_time_start.tv_sec * 1000000 + tot_time_start.tv_usec);
-
-    printf("\nTime total (including memory transfers)\t%f sec\n", total_time * 1e-6);
-    printf("Time for CUDA kernels:\t%f sec\n",totalKernelTime * 1e-6);
-
     free(m);
     free(a);
     free(b);
     free(finalVec);
-    res = cuda_driver_api_exit(ctx, mod);
-    if (res != CUDA_SUCCESS) {
-        printf("cuda_driver_api_exit failed: res = %u\n", res);
-        return -1;
-    }
+
+	printf("Init: %f\n", init_gpu);
+	printf("MemAlloc: %f\n", mem_alloc);
+	printf("HtoD: %f\n", h2d);
+	printf("Exec: %f\n", exec);
+	printf("DtoH: %f\n", d2h);
+	printf("Close: %f\n", close_gpu);
+	printf("Total: %f\n", total);
 
     return 0;
 }
@@ -295,6 +310,10 @@ int ForwardSub(CUmodule mod)
     CUdeviceptr m_cuda, a_cuda, b_cuda;
     CUresult res;
 
+    gettimeofday(&tv_mem_alloc_start, NULL);
+	tvsub(&tv_mem_alloc_start, &tv_total_start, &tv);
+	init_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
     /* Allocate device memory */
     res = cuMemAlloc(&m_cuda, sizeof(float) * Size * Size);
     if (res != CUDA_SUCCESS) {
@@ -313,6 +332,10 @@ int ForwardSub(CUmodule mod)
         printf("cuMemAlloc failed: res = %u\n", res);
         return -1;
     }
+
+	gettimeofday(&tv_h2d_start, NULL);
+    tvsub(&tv_h2d_start, &tv_mem_alloc_start, &tv);
+	mem_alloc = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
     /* Copy data from main memory to device memory */
     res = cuMemcpyHtoD(a_cuda, a, sizeof(float) * Size * Size);
@@ -333,6 +356,10 @@ int ForwardSub(CUmodule mod)
         return -1;
     }
 
+	gettimeofday(&tv_h2d_end, NULL);
+	tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
+	h2d = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
     //int block_size, grid_size;
     //block_size = MAXBLOCKSIZE;
     //grid_size = (Size/block_size) + (!(Size%block_size)? 0:1);
@@ -342,10 +369,6 @@ int ForwardSub(CUmodule mod)
     blockSize2d = 4;
     gridSize2d = (Size/blockSize2d) + (!(Size%blockSize2d?0:1)); 
 
-    // begin timing kernels
-    struct timeval time_start;
-    gettimeofday(&time_start, NULL);
-
     // run kernels
     for (t=0; t<(Size-1); t++) {
         gaussian_launch(mod, gridSize2d, gridSize2d, blockSize2d, blockSize2d, m_cuda, a_cuda, Size, t);
@@ -354,10 +377,9 @@ int ForwardSub(CUmodule mod)
         cuCtxSynchronize();
     }
 
-    // end timing kernels
-    struct timeval time_end;
-    gettimeofday(&time_end, NULL);
-    totalKernelTime = (time_end.tv_sec * 1000000 + time_end.tv_usec) - (time_start.tv_sec * 1000000 + time_start.tv_usec);
+    gettimeofday(&tv_exec_end, NULL);
+    tvsub(&tv_exec_end, &tv_h2d_end, &tv);
+    exec = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
     /* Copy data from device memory to main memory */
     res = cuMemcpyDtoH(m, m_cuda, sizeof(float) * Size * Size);
@@ -376,9 +398,18 @@ int ForwardSub(CUmodule mod)
         return -1;
     }
 
+	gettimeofday(&tv_d2h_end, NULL);
+    tvsub(&tv_d2h_end, &tv_d2h_start, &tv);
+	d2h = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	gettimeofday(&tv_close_start, NULL);
     cuMemFree(m_cuda);
     cuMemFree(a_cuda);
     cuMemFree(b_cuda);
+	gettimeofday(&tv_close_end, NULL);
+
+	tvsub(&tv_close_end, &tv_close_start, &tv);
+	close_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
     return 0;
 }
