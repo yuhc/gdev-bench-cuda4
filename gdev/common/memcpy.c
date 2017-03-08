@@ -34,10 +34,14 @@ int cuda_test_memcpy(unsigned int size)
 	CUdeviceptr data_addr;
 	unsigned int *in, *out;
 	struct timeval tv;
+	struct timeval tv_total_start, tv_total_end;
+	float total;
 	struct timeval tv_h2d_start, tv_h2d_end;
 	float h2d;
 	struct timeval tv_d2h_start, tv_d2h_end;
 	float d2h;
+	struct timeval tv_mem_alloc_start;
+	float init_gpu, close_gpu, mem_alloc;
 
 	in = (unsigned int *) malloc(size);
 	out = (unsigned int *) malloc(size);
@@ -45,7 +49,8 @@ int cuda_test_memcpy(unsigned int size)
 		in[i] = i+1;
 		out[i] = 0;
 	}
-	
+
+	gettimeofday(&tv_total_start, NULL);
 	res = cuInit(0);
 	if (res != CUDA_SUCCESS) {
 		printf("cuInit failed: res = %u\n", (unsigned int)res);
@@ -64,6 +69,7 @@ int cuda_test_memcpy(unsigned int size)
 		return -1;
 	}
 
+	gettimeofday(&tv_mem_alloc_start, NULL);
 	res = cuMemAlloc(&data_addr, size);
 	if (res != CUDA_SUCCESS) {
 		printf("cuMemAlloc failed: res = %u\n", (unsigned int)res);
@@ -107,17 +113,30 @@ int cuda_test_memcpy(unsigned int size)
 			goto end;
 		}
 	}
+	gettimeofday(&tv_total_end, NULL);
 
 	free(in);
 	free(out);
 
+	tvsub(&tv_mem_alloc_start, &tv_total_start, &tv);
+	init_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+	tvsub(&tv_h2d_start, &tv_mem_alloc_start, &tv);
+	mem_alloc = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 	tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
 	h2d = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 	tvsub(&tv_d2h_end, &tv_d2h_start, &tv);
 	d2h = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+	tvsub(&tv_total_end, &tv_d2h_end, &tv);
+	close_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+	tvsub(&tv_total_end, &tv_total_start, &tv);
+	total = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
+	printf("Init: %f\n", init_gpu);
+	printf("MemAlloc: %f\n", mem_alloc);
 	printf("HtoD: %f\n", h2d);
 	printf("DtoH: %f\n", d2h);
+	printf("Close: %f\n", close_gpu);
+	printf("Total: %f\n", total);
 
 	return 0;
 

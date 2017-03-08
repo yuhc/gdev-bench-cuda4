@@ -36,14 +36,27 @@ int cuda_test_idle(unsigned int n, char *path)
 	CUdeviceptr d_data;
 	int block_x, block_y, grid_x, grid_y;
 	char fname[256];
+
 	struct timeval tv;
+	struct timeval tv_total_start, tv_total_end;
+	float total;
+	struct timeval tv_d2h_end;
+	float d2h;
 	struct timeval tv_exec_start, tv_exec_end;
+	struct timeval tv_mem_alloc_start;
+	struct timeval tv_conf_kern_start;
+	float mem_alloc;
 	float exec;
+	float init_gpu;
+	float configure_kernel;
+	float close_gpu;
 
 	block_x = 1;
 	block_y = 1;
 	grid_x = 1;
 	grid_y = 1;
+
+	gettimeofday(&tv_total_start, NULL);
 
 	res = cuInit(0);
 	if (res != CUDA_SUCCESS) {
@@ -85,7 +98,11 @@ int cuda_test_idle(unsigned int n, char *path)
 		return -1;
 	}
 
+	gettimeofday(&tv_mem_alloc_start, NULL);
+
 	res = cuMemAlloc(&d_data, sizeof(unsigned int));
+
+	gettimeofday(&tv_conf_kern_start, NULL);
 
 	/* set kernel parameters */
 	res = cuParamSeti(function, 0, d_data);
@@ -123,6 +140,7 @@ int cuda_test_idle(unsigned int n, char *path)
 	gettimeofday(&tv_exec_end, NULL);
 
 	cuMemcpyDtoH(&n, d_data, sizeof(n));
+	gettimeofday(&tv_d2h_end, NULL);
 
 	printf("n = %u\n", n);
 
@@ -140,10 +158,36 @@ int cuda_test_idle(unsigned int n, char *path)
 		return -1;
 	}
 
+	gettimeofday(&tv_total_end, NULL);
+
+	tvsub(&tv_mem_alloc_start, &tv_total_start, &tv);
+	init_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	tvsub(&tv_conf_kern_start, &tv_mem_alloc_start, &tv);
+	mem_alloc = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	tvsub(&tv_exec_start, &tv_conf_kern_start, &tv);
+	configure_kernel = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
 	tvsub(&tv_exec_end, &tv_exec_start, &tv);
 	exec = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
+	tvsub(&tv_d2h_end, &tv_exec_end, &tv);
+	d2h = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	tvsub(&tv_total_end, &tv_exec_end, &tv);
+	close_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	tvsub(&tv_total_end, &tv_total_start, &tv);
+	total = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+	printf("Init: %f\n", init_gpu);
+	printf("MemAlloc: %f\n", mem_alloc);
+	printf("KernConf: %f\n", configure_kernel);
 	printf("Exec: %f\n", exec);
+	printf("DtoH: %f\n", d2h);
+	printf("Close: %f\n", close_gpu);
+	printf("Total: %f\n", total);
 
 	return 0;
 }

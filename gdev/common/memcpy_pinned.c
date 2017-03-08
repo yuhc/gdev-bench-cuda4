@@ -41,11 +41,23 @@ int cuda_test_memcpy_pinned(unsigned int size)
 	unsigned long h2d;
 	struct timeval tv_d2h_start, tv_d2h_end;
 	unsigned long d2h;
+	struct timeval tv_mem_alloc_start;
+	float init_gpu, close_gpu, mem_alloc, hostcpy;
 
 	buf = malloc(size);
 	if (!buf) {
 		printf("malloc failed\n");
 		return -1;
+	}
+
+	res = cuMemAllocHost((void**) &pin, size);
+	if (res != CUDA_SUCCESS) {
+		printf("cuMemAllocHost failed: res = %u\n", (unsigned int)res);
+		return -1;
+	}
+
+	for (i = 0; i < size / 4; i++) {
+		pin[i] = i+1;
 	}
 
 	gettimeofday(&tv_total_start, NULL);
@@ -68,16 +80,7 @@ int cuda_test_memcpy_pinned(unsigned int size)
 		return -1;
 	}
 
-	res = cuMemAllocHost((void**) &pin, size);
-	if (res != CUDA_SUCCESS) {
-		printf("cuMemAllocHost failed: res = %u\n", (unsigned int)res);
-		return -1;
-	}
-
-	for (i = 0; i < size / 4; i++) {
-		pin[i] = i+1;
-	}
-
+	gettimeofday(&tv_mem_alloc_start, NULL);
 	res = cuMemAlloc(&data_addr, size);
 	if (res != CUDA_SUCCESS) {
 		printf("cuMemAlloc failed: res = %u\n", (unsigned int)res);
@@ -114,12 +117,6 @@ int cuda_test_memcpy_pinned(unsigned int size)
 	}
 
 
-	res = cuMemFreeHost(pin);
-	if (res != CUDA_SUCCESS) {
-		printf("cuMemFreeHost failed: res = %u\n", (unsigned int)res);
-		return -1;
-	}
-
 	res = cuCtxDestroy(ctx);
 	if (res != CUDA_SUCCESS) {
 		printf("cuCtxDestroy failed: res = %u\n", (unsigned int)res);
@@ -127,6 +124,12 @@ int cuda_test_memcpy_pinned(unsigned int size)
 	}
 
 	gettimeofday(&tv_total_end, NULL);
+
+	res = cuMemFreeHost(pin);
+	if (res != CUDA_SUCCESS) {
+		printf("cuMemFreeHost failed: res = %u\n", (unsigned int)res);
+		return -1;
+	}
 
 #if 0
 	for (i = 0; i < size / 4; i++) {
@@ -138,15 +141,28 @@ int cuda_test_memcpy_pinned(unsigned int size)
 	}
 #endif
 
+	tvsub(&tv_mem_alloc_start, &tv_total_start, &tv);
+	init_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+	tvsub(&tv_h2d_start, &tv_mem_alloc_start, &tv);
+	mem_alloc = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 	tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
 	h2d = tv.tv_sec * 1000 + tv.tv_usec / 1000;
+	tvsub(&tv_d2h_start, &tv_h2d_end, &tv);
+	hostcpy = tv.tv_sec * 1000 + tv.tv_usec / 1000;
 	tvsub(&tv_d2h_end, &tv_d2h_start, &tv);
 	d2h = tv.tv_sec * 1000 + tv.tv_usec / 1000;
+	tvsub(&tv_total_end, &tv_d2h_end, &tv);
+	close_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 	tvsub(&tv_total_end, &tv_total_start, &tv);
-	total = tv.tv_sec * 1000 + tv.tv_usec / 1000;
+	total = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
-	printf("HtoD: %lu\n", h2d);
-	printf("DtoH: %lu\n", d2h);
+	printf("Init: %f\n", init_gpu);
+	printf("MemAlloc: %f\n", mem_alloc);
+	printf("HtoD: %f\n", h2d);
+	printf("HostCpy: %f\n", hostcpy);
+	printf("DtoH: %f\n", d2h);
+	printf("Close: %f\n", close_gpu);
+	printf("Total: %f\n", total);
 
 	free(buf);
 

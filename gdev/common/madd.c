@@ -81,24 +81,20 @@ int cuda_test_madd(unsigned int n, char *path)
 		printf("cuInit failed: res = %lu\n", (unsigned long)res);
 		return -1;
 	}
-printf("DEBUG: cuInit finished\n");
 
 	res = cuDeviceGet(&dev, 0);
 	if (res != CUDA_SUCCESS) {
 		printf("cuDeviceGet failed: res = %lu\n", (unsigned long)res);
 		return -1;
 	}
-printf("DEBUG: cuDeviceGet finished\n");
 
 	res = cuCtxCreate(&ctx, 0, dev);
 	if (res != CUDA_SUCCESS) {
 		printf("cuCtxCreate failed: res = %lu\n", (unsigned long)res);
 		return -1;
 	}
-printf("DEBUG: cuCtxCreate finished\n");
 
 	sprintf(fname, "%s/madd_gpu.cubin", path);
-printf("DEBUG: try to load %s\n", fname);
 	res = cuModuleLoad(&module, fname);
 	if (res != CUDA_SUCCESS) {
 		printf("cuModuleLoad() failed\n");
@@ -221,12 +217,14 @@ printf("DEBUG: cuModuleLoad finished\n");
 
 	gettimeofday(&tv_exec_start, NULL);
 	/* launch the kernel */
-	res = cuLaunchGrid(function, grid_x, grid_y);
-	if (res != CUDA_SUCCESS) {
-		printf("cuLaunchGrid failed: res = %lu\n", (unsigned long)res);
-		return -1;
-	}
-	cuCtxSynchronize();
+    for (i = 0; i < 10000; i++) {
+        res = cuLaunchGrid(function, grid_x, grid_y);
+        if (res != CUDA_SUCCESS) {
+            printf("cuLaunchGrid failed: res = %lu\n", (unsigned long)res);
+            return -1;
+        }
+        cuCtxSynchronize();
+    }
 	gettimeofday(&tv_exec_end, NULL);
 
 	gettimeofday(&tv_d2h_start, NULL);
@@ -241,7 +239,7 @@ printf("DEBUG: cuModuleLoad finished\n");
 	/* Read back */
 	for (i = 0; i < n; i++) {
 		idx = i*n;
-		for(j = 0; j < n; j++) {			
+		for(j = 0; j < n; j++) {
 			dummy_c = c[idx++];
 		}
 	}
