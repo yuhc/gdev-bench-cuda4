@@ -127,6 +127,18 @@ int cuda_test_memcpy_async(unsigned int size)
 		return -1;
 	}
 
+	res = cuMemFreeHost(out);
+	if (res != CUDA_SUCCESS) {
+		printf("cuMemFreeHost(out) failed: res = %u\n", (unsigned int)res);
+		return -1;
+	}
+
+	res = cuMemFreeHost(in);
+	if (res != CUDA_SUCCESS) {
+		printf("cuMemFreeHost(in) failed: res = %u\n", (unsigned int)res);
+		return -1;
+	}
+
 	res = cuStreamDestroy(stream);
 	if (res != CUDA_SUCCESS) {
 		printf("cuStreamDestroy failed: res = %u\n", (unsigned int)res);
@@ -146,18 +158,6 @@ int cuda_test_memcpy_async(unsigned int size)
 			printf("in[%d] = %u, out[%d] = %u\n",
 				   i, in[i], i, out[i]);
 		}
-	}
-
-	res = cuMemFreeHost(out);
-	if (res != CUDA_SUCCESS) {
-		printf("cuMemFreeHost(out) failed: res = %u\n", (unsigned int)res);
-		return -1;
-	}
-
-	res = cuMemFreeHost(in);
-	if (res != CUDA_SUCCESS) {
-		printf("cuMemFreeHost(in) failed: res = %u\n", (unsigned int)res);
-		return -1;
 	}
 
 	tvsub(&tv_init_start, &tv_total_start, &tv);

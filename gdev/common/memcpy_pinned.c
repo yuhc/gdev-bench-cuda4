@@ -117,7 +117,11 @@ int cuda_test_memcpy_pinned(unsigned int size)
 		return -1;
 	}
 
-
+	res = cuMemFreeHost(pin);
+	if (res != CUDA_SUCCESS) {
+		printf("cuMemFreeHost failed: res = %u\n", (unsigned int)res);
+		return -1;
+	}
 	res = cuCtxDestroy(ctx);
 	if (res != CUDA_SUCCESS) {
 		printf("cuCtxDestroy failed: res = %u\n", (unsigned int)res);
@@ -125,12 +129,6 @@ int cuda_test_memcpy_pinned(unsigned int size)
 	}
 
 	gettimeofday(&tv_total_end, NULL);
-
-	res = cuMemFreeHost(pin);
-	if (res != CUDA_SUCCESS) {
-		printf("cuMemFreeHost failed: res = %u\n", (unsigned int)res);
-		return -1;
-	}
 
 #if 0
 	for (i = 0; i < size / 4; i++) {
