@@ -256,7 +256,7 @@ int cuda_test_fmadd(unsigned int n, char *path)
 	mem_alloc = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 	tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
 	h2d = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
-	tvsub(&tv_exec_start, &tv_d2h_end, &tv);
+	tvsub(&tv_exec_start, &tv_h2d_end, &tv);
 	configure_kernel = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 	tvsub(&tv_exec_end, &tv_exec_start, &tv);
 	exec = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;

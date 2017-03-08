@@ -36,28 +36,18 @@ int cuda_test_memcpy_pinned(unsigned int size)
 	unsigned int *buf, *pin;
 	struct timeval tv;
 	struct timeval tv_total_start, tv_total_end;
-	unsigned long total;
+	float total;
 	struct timeval tv_h2d_start, tv_h2d_end;
-	unsigned long h2d;
+	float h2d;
 	struct timeval tv_d2h_start, tv_d2h_end;
-	unsigned long d2h;
-	struct timeval tv_mem_alloc_start;
-	float init_gpu, close_gpu, mem_alloc, hostcpy;
+	float d2h;
+	struct timeval tv_mem_alloc_start, tv_init_start;
+	float init_gpu, close_gpu, mem_alloc, hostcpy, data_init;
 
 	buf = malloc(size);
 	if (!buf) {
 		printf("malloc failed\n");
 		return -1;
-	}
-
-	res = cuMemAllocHost((void**) &pin, size);
-	if (res != CUDA_SUCCESS) {
-		printf("cuMemAllocHost failed: res = %u\n", (unsigned int)res);
-		return -1;
-	}
-
-	for (i = 0; i < size / 4; i++) {
-		pin[i] = i+1;
 	}
 
 	gettimeofday(&tv_total_start, NULL);
@@ -78,6 +68,17 @@ int cuda_test_memcpy_pinned(unsigned int size)
 	if (res != CUDA_SUCCESS) {
 		printf("cuCtxCreate failed: res = %u\n", (unsigned int)res);
 		return -1;
+	}
+
+	gettimeofday(&tv_init_start, NULL);
+	res = cuMemAllocHost((void**) &pin, size);
+	if (res != CUDA_SUCCESS) {
+		printf("cuMemAllocHost failed: res = %u\n", (unsigned int)res);
+		return -1;
+	}
+
+	for (i = 0; i < size / 4; i++) {
+		pin[i] = i+1;
 	}
 
 	gettimeofday(&tv_mem_alloc_start, NULL);
@@ -141,8 +142,10 @@ int cuda_test_memcpy_pinned(unsigned int size)
 	}
 #endif
 
-	tvsub(&tv_mem_alloc_start, &tv_total_start, &tv);
+	tvsub(&tv_init_start, &tv_total_start, &tv);
 	init_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+	tvsub(&tv_mem_alloc_start, &tv_init_start, &tv);
+	data_init = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 	tvsub(&tv_h2d_start, &tv_mem_alloc_start, &tv);
 	mem_alloc = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 	tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
@@ -157,6 +160,7 @@ int cuda_test_memcpy_pinned(unsigned int size)
 	total = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	printf("Init: %f\n", init_gpu);
+	printf("DataInit: %f\n", data_init);
 	printf("MemAlloc: %f\n", mem_alloc);
 	printf("HtoD: %f\n", h2d);
 	printf("HostCpy: %f\n", hostcpy);

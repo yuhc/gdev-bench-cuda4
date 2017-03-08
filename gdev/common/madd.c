@@ -100,7 +100,6 @@ int cuda_test_madd(unsigned int n, char *path)
 		printf("cuModuleLoad() failed\n");
 		return -1;
 	}
-printf("DEBUG: cuModuleLoad finished\n");
 	res = cuModuleGetFunction(&function, module, "_Z3addPjS_S_j");
 	if (res != CUDA_SUCCESS) {
 		printf("cuModuleGetFunction() failed\n");

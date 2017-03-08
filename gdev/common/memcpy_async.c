@@ -36,30 +36,13 @@ int cuda_test_memcpy_async(unsigned int size)
 	unsigned int *in, *out;
 	struct timeval tv;
 	struct timeval tv_total_start, tv_total_end;
-	unsigned long total;
+    float total;
 	struct timeval tv_h2d_start, tv_h2d_end;
 	float h2d;
 	struct timeval tv_d2h_start, tv_d2h_end;
 	float d2h;
-	struct timeval tv_mem_alloc_start;
-	float init_gpu, close_gpu, mem_alloc;
-
-	res = cuMemAllocHost((void **)&in, size);
-	if (res != CUDA_SUCCESS) {
-		printf("cuMemAllocHost(in) failed: res = %u\n", (unsigned int)res);
-		return -1;
-	}
-
-	res = cuMemAllocHost((void **)&out, size);
-	if (res != CUDA_SUCCESS) {
-		printf("cuMemAllocHost(out) failed: res = %u\n", (unsigned int)res);
-		return -1;
-	}
-
-	for (i = 0; i < size / 4; i++) {
-		in[i] = i+1;
-		out[i] = 0;
-	}
+	struct timeval tv_mem_alloc_start, tv_init_start;
+	float init_gpu, close_gpu, mem_alloc, data_init;
 
 	gettimeofday(&tv_total_start, NULL);
 
@@ -85,6 +68,24 @@ int cuda_test_memcpy_async(unsigned int size)
 	if (res != CUDA_SUCCESS) {
 		printf("cuStreamCreate failed: res = %u\n", (unsigned int)res);
 		return -1;
+	}
+
+	gettimeofday(&tv_init_start, NULL);
+	res = cuMemAllocHost((void **)&in, size);
+	if (res != CUDA_SUCCESS) {
+		printf("cuMemAllocHost(in) failed: res = %u\n", (unsigned int)res);
+		return -1;
+	}
+
+	res = cuMemAllocHost((void **)&out, size);
+	if (res != CUDA_SUCCESS) {
+		printf("cuMemAllocHost(out) failed: res = %u\n", (unsigned int)res);
+		return -1;
+	}
+
+	for (i = 0; i < size / 4; i++) {
+		in[i] = i+1;
+		out[i] = 0;
 	}
 
 	gettimeofday(&tv_mem_alloc_start, NULL);
@@ -159,8 +160,10 @@ int cuda_test_memcpy_async(unsigned int size)
 		return -1;
 	}
 
-	tvsub(&tv_mem_alloc_start, &tv_total_start, &tv);
+	tvsub(&tv_init_start, &tv_total_start, &tv);
 	init_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+	tvsub(&tv_mem_alloc_start, &tv_init_start, &tv);
+	data_init = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 	tvsub(&tv_h2d_start, &tv_mem_alloc_start, &tv);
 	mem_alloc = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 	tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
@@ -173,6 +176,7 @@ int cuda_test_memcpy_async(unsigned int size)
 	total = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	printf("Init: %f\n", init_gpu);
+	printf("DataInit: %f\n", data_init);
 	printf("MemAlloc: %f\n", mem_alloc);
 	printf("HtoD: %f\n", h2d);
 	printf("DtoH: %f\n", d2h);
