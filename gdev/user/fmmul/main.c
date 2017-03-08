@@ -4,7 +4,7 @@ int cuda_test_fmmul(unsigned int n, char *path);
 
 int main(int argc, char *argv[])
 {
-	unsigned int n = 3;
+	unsigned int n = 1024;
 
 	if (argc > 1)
 		n = atoi(argv[1]);

@@ -4,7 +4,7 @@ int cuda_test_memcpy_async(unsigned int size);
 
 int main(int argc, char *argv[])
 {
-	unsigned int size = 0x10000000; /* 256MB */
+	unsigned int size = 0x10000000>>2; /* 256MB */
 
 	if (argc > 1)
 		sscanf(argv[1], "%x", &size);
