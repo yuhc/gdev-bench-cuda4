@@ -37,12 +37,12 @@ float total;
 struct timeval tv_h2d_start, tv_h2d_end;
 float h2d;
 struct timeval tv_d2h_start, tv_d2h_end;
-float d2h;
+float d2h = 0;
 struct timeval tv_exec_start, tv_exec_end;
 struct timeval tv_mem_alloc_start;
 struct timeval tv_close_start;
 float mem_alloc;
-float exec;
+float exec = 0;
 float init_gpu;
 float close_gpu;
 
@@ -62,7 +62,6 @@ int bfs_launch
 	bdy = 1;
 	gdx = nr_blocks;
 	gdy = 1;
-    exec = 0;
 
 	/* get functions. */
 	res = cuModuleGetFunction(&f1, mod, "_Z6KernelP4NodePiS1_S1_S1_S1_i");
@@ -87,10 +86,10 @@ int bfs_launch
 			return -1;
 		}
 	    gettimeofday(&tv_h2d_end, NULL);
-    	tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
+		tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
 	    h2d += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
-		/* f1 */
+	    /* f1 */
 		void *param1[] = {&d_graph_nodes, &d_graph_edges, &d_graph_mask, 
 						  &d_updating_graph_mask, &d_graph_visited, &d_cost,
 						  &nr_nodes};
@@ -114,8 +113,8 @@ int bfs_launch
         }
 		/* check if kernel execution generated and error */
 	    gettimeofday(&tv_exec_end, NULL);
-    	tvsub(&tv_exec_end, &tv_h2d_end, &tv);
-    	exec += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+		tvsub(&tv_exec_end, &tv_h2d_end, &tv);
+		exec += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 		res = cuMemcpyDtoH(&stop, d_over, sizeof(int));
 		if (res != CUDA_SUCCESS) {
@@ -123,7 +122,7 @@ int bfs_launch
 			return -1;
 		}
 	    gettimeofday(&tv_d2h_end, NULL);
-    	tvsub(&tv_d2h_end, &tv_exec_end, &tv);
+		tvsub(&tv_d2h_end, &tv_exec_end, &tv);
 	    d2h += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 		cuCtxSynchronize();
@@ -238,7 +237,7 @@ int BFSGraph(int argc, char** argv)
 		return -1;
 	}
 
-    gettimeofday(&tv_mem_alloc_start, NULL);
+	gettimeofday(&tv_mem_alloc_start, NULL);
 	tvsub(&tv_mem_alloc_start, &tv_total_start, &tv);
 	init_gpu = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
@@ -283,7 +282,7 @@ int BFSGraph(int argc, char** argv)
 	}
 
 	gettimeofday(&tv_h2d_start, NULL);
-    tvsub(&tv_h2d_start, &tv_mem_alloc_start, &tv);
+	tvsub(&tv_h2d_start, &tv_mem_alloc_start, &tv);
 	mem_alloc = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	/* copy the node list to device memory */
@@ -324,9 +323,10 @@ int BFSGraph(int argc, char** argv)
 	gettimeofday(&tv_h2d_end, NULL);
 	tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
 	h2d = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
-    d2h = 0;
 
-	bfs_launch(mod, num_of_blocks, num_of_threads_per_block, no_of_nodes,
+	/* we cannot use maximum thread number because of the virtualization
+ 	 * limitation in a3.h */
+	bfs_launch(mod, num_of_blocks, num_of_threads_per_block / 4, no_of_nodes,
 			   d_over, d_graph_nodes, d_graph_edges, d_graph_mask, 
 			   d_updating_graph_mask, d_graph_visited, d_cost);
 
@@ -349,6 +349,7 @@ int BFSGraph(int argc, char** argv)
 	cuMemFree(d_updating_graph_mask);
 	cuMemFree(d_graph_visited);
 	cuMemFree(d_cost);
+	cuMemFree(d_over);
 
 	res = cuda_driver_api_exit(ctx, mod);
 	if (res != CUDA_SUCCESS) {
@@ -358,6 +359,7 @@ int BFSGraph(int argc, char** argv)
 	gettimeofday(&tv_total_end, NULL);
 
 	/* Store the result into a file */
+#if 0
 	{
 		FILE *fpo = fopen("result.txt", "w");
 		for(i = 0; i < no_of_nodes; i++)
@@ -365,6 +367,7 @@ int BFSGraph(int argc, char** argv)
 		fclose(fpo);
 		printf("/* Result stored in result.txt */\n");
 	}
+#endif
 
 	free(h_graph_nodes);
 	free(h_graph_edges);
