@@ -131,7 +131,7 @@ void bpnn_train_cuda(BPNN *net, float *eo, float *eh)
 	float sum;
 	float *input_weights_one_dim;
 	float *input_weights_prev_one_dim;
-	num_blocks = in / 16;  
+	num_blocks = in / 16 / 32; // data size is enlarged 32 times in this test  
 	CUdeviceptr input_cuda;
 	CUdeviceptr input_hidden_cuda;
 	CUdeviceptr output_hidden_cuda;
