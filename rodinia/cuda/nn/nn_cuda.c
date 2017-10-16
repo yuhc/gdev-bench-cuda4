@@ -160,12 +160,18 @@ int main(int argc, char* argv[])
 	/*
 	 * execute kernel
 	 */
+int tc;
+for (tc = 0; tc < 1000; tc++) {
+gettimeofday(&tv_h2d_end, NULL);
+
 	euclid_launch(mod, d_locations,d_distances,numRecords,lat,lng);
 	cuCtxSynchronize();
 
     gettimeofday(&tv_exec_end, NULL);
     tvsub(&tv_exec_end, &tv_h2d_end, &tv);
-    exec = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+    exec += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+
+}
 
 	/* copy data from device memory to host memory */
 	res = cuMemcpyDtoH(distances, d_distances, sizeof(float) * numRecords);

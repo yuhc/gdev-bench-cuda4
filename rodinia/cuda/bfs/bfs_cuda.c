@@ -322,13 +322,17 @@ int BFSGraph(int argc, char** argv)
 	}
 	gettimeofday(&tv_h2d_end, NULL);
 	tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
-	h2d = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+	h2d += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
+int tc;
+for (tc = 0; tc < 200; tc++) {
 	/* we cannot use maximum thread number because of the virtualization
  	 * limitation in a3.h */
 	bfs_launch(mod, num_of_blocks, num_of_threads_per_block / 4, no_of_nodes,
 			   d_over, d_graph_nodes, d_graph_edges, d_graph_mask, 
 			   d_updating_graph_mask, d_graph_visited, d_cost);
+
+} // tc
 
 	/* copy result from device to host */
 	gettimeofday(&tv_d2h_start, NULL);
