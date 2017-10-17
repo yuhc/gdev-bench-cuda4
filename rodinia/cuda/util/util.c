@@ -33,7 +33,7 @@ CUresult cuda_driver_api_init(CUcontext *pctx, CUmodule *pmod, const char *f)
 	
 	res = cuModuleLoad(pmod, f);
 	if (res != CUDA_SUCCESS) {
-		printf("cuModuleLoad() failed\n");
+		printf("cuModuleLoad() failed: res = %lu\n", (unsigned long)res);
 		cuCtxDestroy(*pctx);
 		return res;
 	}
