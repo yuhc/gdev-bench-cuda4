@@ -32,10 +32,10 @@ float d2h;
 struct timeval tv_exec_start, tv_exec_end;
 struct timeval tv_mem_alloc_start;
 struct timeval tv_close_start;
-float mem_alloc;
-float exec;
-float init_gpu;
-float close_gpu;
+float mem_alloc = 0;
+float exec = 0;
+float init_gpu = 0;
+float close_gpu = 0;
 
 void run(int argc, char** argv);
 
@@ -279,6 +279,7 @@ void run(int argc, char** argv)
 							total_iterations, pyramid_height, 
 							blockCols, blockRows, borderCols, borderRows);
 
+    cuCtxSynchronize();
     gettimeofday(&tv_exec_end, NULL);
     tvsub(&tv_exec_end, &tv_h2d_end, &tv);
     exec += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;

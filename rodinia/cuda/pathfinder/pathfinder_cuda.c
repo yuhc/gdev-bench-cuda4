@@ -131,9 +131,15 @@ int calc_path(CUmodule mod, CUdeviceptr gpuWall, CUdeviceptr gpuResult[2], int r
         int temp = src;
         src = dst;
         dst = temp;
+        gettimeofday(&tv_exec_start, NULL);
         pathfinder_launch(mod, blockCols, BLOCK_SIZE,
                 MIN(pyramid_height, rows-t-1), gpuWall, gpuResult[src],
                 gpuResult[dst], cols,rows, t, borderCols);
+
+        cuCtxSynchronize();
+        gettimeofday(&tv_exec_end, NULL);
+        tvsub(&tv_exec_end, &tv_exec_start, &tv);
+        exec += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
     }
     return dst;
 }
@@ -208,17 +214,9 @@ int run(int argc, char** argv)
 
     int final_ret;
 
-int tc;
-for (tc = 0; tc < 100; tc++) {
-
-    gettimeofday(&tv_h2d_end, NULL);
     final_ret = calc_path(mod, gpuWall, gpuResult, rows, cols, pyramid_height, blockCols, borderCols);
 
     gettimeofday(&tv_exec_end, NULL);
-    tvsub(&tv_exec_end, &tv_h2d_end, &tv);
-    exec += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
-
-}
 
     /* Copy data from device memory to main memory */
     res = cuMemcpyDtoH(result, gpuResult[final_ret], sizeof(float) * cols);

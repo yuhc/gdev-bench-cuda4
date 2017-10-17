@@ -232,6 +232,7 @@ int main (int argc, char *argv[])
 
 	lud_launch(mod, d_m, matrix_dim);
 
+    cuCtxSynchronize();
     gettimeofday(&tv_exec_end, NULL);
     tvsub(&tv_exec_end, &tv_h2d_end, &tv);
     exec = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;

@@ -6,10 +6,10 @@
 #include <vector>
 #ifdef __cplusplus
 extern "C" {
-#include "/usr/local/gdev/include/cuda.h"
+#include <cuda.h>
 }
 #else
-#include "/usr/local/gdev/include/cuda.h"
+#include <cuda.h>
 #endif
 #include "util.h" /* cuda_driver_api_{init,exit}() */
 #include "nn.h"
@@ -25,7 +25,7 @@ struct timeval tv_exec_start, tv_exec_end;
 struct timeval tv_mem_alloc_start;
 struct timeval tv_close_start;
 float mem_alloc;
-float exec;
+float exec = 0;
 float init_gpu;
 float close_gpu;
 
@@ -161,16 +161,15 @@ int main(int argc, char* argv[])
 	 * execute kernel
 	 */
 int tc;
-for (tc = 0; tc < 1000; tc++) {
-gettimeofday(&tv_h2d_end, NULL);
+for (tc = 0; tc < 10000; tc++) {
+    gettimeofday(&tv_h2d_end, NULL);
 
 	euclid_launch(mod, d_locations,d_distances,numRecords,lat,lng);
-	cuCtxSynchronize();
 
+	cuCtxSynchronize();
     gettimeofday(&tv_exec_end, NULL);
     tvsub(&tv_exec_end, &tv_h2d_end, &tv);
     exec += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
-
 }
 
 	/* copy data from device memory to host memory */
