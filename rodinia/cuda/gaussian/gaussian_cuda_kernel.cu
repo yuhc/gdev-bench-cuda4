@@ -1,7 +1,7 @@
 #include <cuda.h>
 
-void Fan1(float *m, float *a, int Size, int t);
-void Fan2(float *m, float *a, float *b,int Size, int j1, int t);
+__global__ void Fan1(float *m, float *a, int Size, int t);
+__global__ void Fan2(float *m, float *a, float *b,int Size, int j1, int t);
 
 /*-------------------------------------------------------
  ** Fan1() -- Calculate multiplier matrix
