@@ -90,6 +90,7 @@ int bfs_launch
 	    h2d += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	    /* f1 */
+        printf("%d, %d\n", gdx, bdx);
 		void *param1[] = {&d_graph_nodes, &d_graph_edges, &d_graph_mask, 
 						  &d_updating_graph_mask, &d_graph_visited, &d_cost,
 						  &nr_nodes};
@@ -181,8 +182,8 @@ int BFSGraph(int argc, char** argv)
 	/* Make execution Parameters according to the number of nodes and 
 	   distribute threads across multiple Blocks if necessary */
 	if (no_of_nodes > MAX_THREADS_PER_BLOCK) {
-		num_of_blocks = (int)ceil(no_of_nodes / (double)MAX_THREADS_PER_BLOCK); 
-		num_of_threads_per_block = MAX_THREADS_PER_BLOCK; 
+		num_of_blocks = (int)ceil(no_of_nodes / (double)MAX_THREADS_PER_BLOCK) * 2; 
+		num_of_threads_per_block = MAX_THREADS_PER_BLOCK / 2;  //fix to 256
 	}
 
 	/* allocate host memory */
