@@ -90,7 +90,6 @@ int bfs_launch
 	    h2d += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 	    /* f1 */
-        printf("%d, %d\n", gdx, bdx);
 		void *param1[] = {&d_graph_nodes, &d_graph_edges, &d_graph_mask, 
 						  &d_updating_graph_mask, &d_graph_visited, &d_cost,
 						  &nr_nodes};
