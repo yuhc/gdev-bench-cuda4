@@ -161,7 +161,7 @@ int main(int argc, char* argv[])
 	 * execute kernel
 	 */
 int tc;
-for (tc = 0; tc < 10000; tc++) {
+for (tc = 0; tc < 1000; tc++) {
 
 	euclid_launch(mod, d_locations,d_distances,numRecords,lat,lng);
 

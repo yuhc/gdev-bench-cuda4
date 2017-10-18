@@ -181,9 +181,10 @@ int BFSGraph(int argc, char** argv)
 	/* Make execution Parameters according to the number of nodes and 
 	   distribute threads across multiple Blocks if necessary */
 	if (no_of_nodes > MAX_THREADS_PER_BLOCK) {
-		num_of_blocks = (int)ceil(no_of_nodes / (double)MAX_THREADS_PER_BLOCK) * 2; 
-		num_of_threads_per_block = MAX_THREADS_PER_BLOCK / 2;  //fix to 256
+		num_of_blocks = (int)ceil(no_of_nodes / (double)MAX_THREADS_PER_BLOCK) * 4; 
+		num_of_threads_per_block = MAX_THREADS_PER_BLOCK / 4;  //fix to 256
 	}
+printf("%d\n", num_of_threads_per_block);
 
 	/* allocate host memory */
 	h_graph_nodes = (struct Node*) malloc(sizeof(struct Node) * no_of_nodes);
