@@ -371,7 +371,7 @@ int ForwardSub(CUmodule mod)
 
     // run kernels
     for (t=0; t<(Size-1); t++) {
-        gaussian_launch(mod, gridSize2d, gridSize2d, blockSize2d, blockSize2d, m_cuda, a_cuda, Size, t);
+        gaussian_launch(mod, gridSize2d, 1, blockSize2d, 1, m_cuda, a_cuda, Size, t);
         cuCtxSynchronize();
         gaussian_launch2(mod, gridSize2d, gridSize2d, blockSize2d, blockSize2d, m_cuda, a_cuda, b_cuda, Size, Size-t, t);
         cuCtxSynchronize();

@@ -132,7 +132,8 @@ int calc_path(CUmodule mod, CUdeviceptr gpuWall, CUdeviceptr gpuResult[2], int r
         src = dst;
         dst = temp;
         gettimeofday(&tv_exec_start, NULL);
-        pathfinder_launch(mod, blockCols, BLOCK_SIZE,
+//        pathfinder_launch(mod, blockCols, BLOCK_SIZE,
+        pathfinder_launch(mod, rows * cols / BLOCK_SIZE, BLOCK_SIZE,
                 MIN(pyramid_height, rows-t-1), gpuWall, gpuResult[src],
                 gpuResult[dst], cols,rows, t, borderCols);
 

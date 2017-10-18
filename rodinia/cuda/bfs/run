@@ -1,1 +1,1 @@
-./bfs ../../data/bfs/graph1MW_6.txt
+CUDA_VISIBLE_DEVICES=1 ./bfs ../../data/bfs/graph65536.txt

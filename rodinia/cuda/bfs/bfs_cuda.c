@@ -297,6 +297,7 @@ int BFSGraph(int argc, char** argv)
 		printf("cuMemcpyHtoD failed: res = %u\n", res);
 		return -1;
 	}
+
 	/* copy the mask to device memory */
 	res = cuMemcpyHtoD(d_graph_mask, h_graph_mask, sizeof(int) * no_of_nodes);
 	if (res != CUDA_SUCCESS) {
@@ -324,15 +325,11 @@ int BFSGraph(int argc, char** argv)
 	tvsub(&tv_h2d_end, &tv_h2d_start, &tv);
 	h2d += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
-int tc;
-for (tc = 0; tc < 200; tc++) {
 	/* we cannot use maximum thread number because of the virtualization
  	 * limitation in a3.h */
-	bfs_launch(mod, num_of_blocks, num_of_threads_per_block / 4, no_of_nodes,
+	bfs_launch(mod, num_of_blocks, num_of_threads_per_block, no_of_nodes,
 			   d_over, d_graph_nodes, d_graph_edges, d_graph_mask, 
 			   d_updating_graph_mask, d_graph_visited, d_cost);
-
-} // tc
 
 	/* copy result from device to host */
 	gettimeofday(&tv_d2h_start, NULL);
