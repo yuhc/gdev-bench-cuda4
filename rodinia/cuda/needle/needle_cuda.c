@@ -253,6 +253,8 @@ int runTest( int argc, char** argv)
         needle_launch(mod, i, 1, BLOCK_SIZE, 1, referrence_cuda, matrix_cuda,
                 matrix_cuda_out, max_cols, penalty, i, block_width);
 	}
+    	cuCtxSynchronize();
+
 	printf("Processing bottom-right matrix\n");
     //process bottom-right matrix
 	for(i = block_width - 1  ; i >= 1 ; i--){
@@ -260,6 +262,7 @@ int runTest( int argc, char** argv)
                 matrix_cuda_out, max_cols, penalty, i, block_width);
 	}
 
+    cuCtxSynchronize();
     gettimeofday(&tv_exec_end, NULL);
     tvsub(&tv_exec_end, &tv_h2d_end, &tv);
     exec = tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
