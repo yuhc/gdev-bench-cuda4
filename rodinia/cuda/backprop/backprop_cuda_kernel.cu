@@ -67,8 +67,7 @@ bpnn_layerforward_CUDA(float *input_cuda,
 	   }
 
    }
-   */
-
+*/
    __syncthreads();
 
    if ( tx == 0 ) {
