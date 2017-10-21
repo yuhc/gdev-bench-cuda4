@@ -53,7 +53,6 @@ int bfs_launch
  CUdeviceptr d_graph_visited, CUdeviceptr d_cost)
 {
 	int bdx, bdy, gdx, gdy;
-	int k = 0;
 	int stop;
 	CUfunction f1, f2;
 	CUresult res;
@@ -95,10 +94,11 @@ int bfs_launch
 						  &nr_nodes};
 		res = cuLaunchKernel(f1, gdx, gdy, 1, bdx, bdy, 1, 0, 0, 
 							 (void**)param1, NULL);
-        if (res != CUDA_SUCCESS) {
-            printf("cuLaunchKernel(f1) failed: res = %u\n", res);
-            return -1;
-        }
+		if (res != CUDA_SUCCESS) {
+		    printf("cuLaunchKernel(f1) failed: res = %u\n", res);
+		    return -1;
+		}
+		cuCtxSynchronize();
 		/* check if kernel execution generated and error */
 
 		/* f2 */
@@ -106,13 +106,14 @@ int bfs_launch
 						  &d_graph_visited, &d_over,  &nr_nodes};
 		res = cuLaunchKernel(f2, gdx, gdy, 1, bdx, bdy, 1, 0, 0, 
 							 (void**)param2, NULL);
-        if (res != CUDA_SUCCESS) {
-            printf("cuLaunchKernel(f2) failed: res = %u\n", res);
-            return -1;
-        }
+		if (res != CUDA_SUCCESS) {
+		    printf("cuLaunchKernel(f2) failed: res = %u\n", res);
+		    return -1;
+		}
+
 		cuCtxSynchronize();
 		/* check if kernel execution generated and error */
-	    gettimeofday(&tv_exec_end, NULL);
+	    	gettimeofday(&tv_exec_end, NULL);
 		tvsub(&tv_exec_end, &tv_h2d_end, &tv);
 		exec += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
@@ -121,12 +122,11 @@ int bfs_launch
 			printf("cuMemcpyDtoH(stop) failed: res = %u\n", res);
 			return -1;
 		}
-	    gettimeofday(&tv_d2h_end, NULL);
+	    	gettimeofday(&tv_d2h_end, NULL);
 		tvsub(&tv_d2h_end, &tv_exec_end, &tv);
-	    d2h += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
+	   	d2h += tv.tv_sec * 1000.0 + (float) tv.tv_usec / 1000.0;
 
 		cuCtxSynchronize();
-		k++;
 	} while (stop);
 
 	return 0;
@@ -181,10 +181,9 @@ int BFSGraph(int argc, char** argv)
 	/* Make execution Parameters according to the number of nodes and 
 	   distribute threads across multiple Blocks if necessary */
 	if (no_of_nodes > MAX_THREADS_PER_BLOCK) {
-		num_of_blocks = (int)ceil(no_of_nodes / (double)MAX_THREADS_PER_BLOCK) * 4; 
-		num_of_threads_per_block = MAX_THREADS_PER_BLOCK / 4;  //fix to 256
+		num_of_blocks = (int)ceil(no_of_nodes / (double)MAX_THREADS_PER_BLOCK); 
+		num_of_threads_per_block = MAX_THREADS_PER_BLOCK;
 	}
-printf("%d\n", num_of_threads_per_block);
 
 	/* allocate host memory */
 	h_graph_nodes = (struct Node*) malloc(sizeof(struct Node) * no_of_nodes);

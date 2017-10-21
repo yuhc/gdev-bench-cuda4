@@ -1,7 +1,7 @@
 #ifndef __BFS_H__
 #define __BFS_H__
 
-#define MAX_THREADS_PER_BLOCK 512
+#define MAX_THREADS_PER_BLOCK 128
 
 #ifndef true
 #define true 1
